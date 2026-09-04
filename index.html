@@ -38,25 +38,25 @@
 
         const createScene = function () {
             const scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.12, 1); // Красивый темно-серый фон
+            scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.12, 1); // Темно-серый фон
 
-            // Создаем автоматическое освещение среды, чтобы металл и текстуры блестели как в Blender
+            // Автоматическое освещение среды для правильного блеска материалов
             const environment = scene.createDefaultEnvironment({
                 createGround: false,
                 createSkybox: false
             });
 
             // Камера с вращением вокруг модели мышкой или пальцем
-            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
             camera.wheelDeltaPercentage = 0.01; // Плавное приближение
 
-            // Дополнительный мягкий свет со всех сторон, чтобы убрать черные провалы в тенях
+            // Дополнительный мягкий свет, чтобы убрать черные тени
             const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
             light.intensity = 0.8;
 
-            // Загружаем ваш файл untitled.glb из корня репозитория
-            BABYLON.SceneLoader.Append("", "untitled.glb", scene, function (scene) {
+            // Загружаем ваш файл untitled.glb из корня репозитория (добавлен правильный путь ./)
+            BABYLON.SceneLoader.Append("", "./untitled.glb", scene, function (scene) {
                 
                 scene.executeWhenReady(function () {
                     const buttonsList = document.getElementById('buttons-list');
@@ -81,8 +81,10 @@
                         }
                     });
                     
-                    // Центрируем камеру точно по центру вашей модели
-                    camera.setTarget(BABYLON.Vector3.Zero());
+                    // УМНЫЙ ФОКУС КАМЕРЫ: Вавилон сам найдет модель и наведется на нее, где бы она ни лежала
+                    if (scene.meshes.length > 0) {
+                        camera.zoomOn(scene.meshes);
+                    }
                 });
                 
             }, null, function (error) {
