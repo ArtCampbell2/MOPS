@@ -1,22 +1,114 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Тест 3D модели</title>
-    <style>
-        /* Растягиваем страницу и плеер на весь экран, фон темно-серый */
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
-        model-viewer { width: 100%; height: 100%; display: block; outline: none; }
-    </style>
-    
-    <!-- Подключаем скрипт плеера от Google -->
-    <script type="module" src="https://googleapis.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Мопс — 3D Viewer</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #101418; color: #e7edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  model-viewer { width: 100%; height: 100%; --poster-color: transparent; --progress-bar-color: #3fa9f5; --progress-mask: transparent; }
+  #panel { position: absolute; top: 16px; left: 16px; z-index: 20; width: 280px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: rgba(22, 28, 34, 0.92); border: 1px solid #2b3540; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.45); overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #2b3540; }
+  .head .badge { width: 30px; height: 30px; border-radius: 8px; flex: none; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #3fa9f5, #2b6cff); font-weight: 700; font-size: 15px; color: #fff; }
+  .head h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .head .sub { font-size: 11.5px; color: #93a1ad; margin-top: 2px; }
+  .actions { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #2b3540; }
+  .actions button { flex: 1; border: 1px solid #2b3540; background: #1e262e; color: #e7edf3; padding: 7px 8px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
+  .actions button:hover { background: #26303a; border-color: #3a4b5c; }
+  .list { overflow-y: auto; flex: 1; padding: 6px; scrollbar-width: thin; scrollbar-color: #3a4b5c transparent; }
+  .list::-webkit-scrollbar { width: 9px; }
+  .list::-webkit-scrollbar-thumb { background: #3a4b5c; border-radius: 8px; border: 2px solid #161c22; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 3px 0; border-radius: 8px; cursor: pointer; user-select: none; border: 1px solid transparent; transition: background .12s, border-color .12s; }
+  .item:hover { background: #1e262e; border-color: #2b3540; }
+  .item .check { width: 18px; height: 18px; border-radius: 5px; border: 2px solid #5a6a78; flex: none; display: flex; align-items: center; justify-content: center; transition: background .12s, border-color .12s; }
+  .item.on .check { background: #3fa9f5; border-color: #3fa9f5; }
+  .item .check::after { content: ""; width: 10px; height: 10px; border-radius: 2px; background: #fff; transform: scale(0); transition: transform .12s; }
+  .item.on .check::after { transform: scale(1); }
+  .item .name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item.off .name { color: #93a1ad; text-decoration: line-through; }
+  .empty { padding: 22px; text-align: center; color: #93a1ad; font-size: 13px; }
+  .foot { padding: 10px 14px; border-top: 1px solid #2b3540; font-size: 11px; color: #93a1ad; }
+  .pick { position: absolute; top: 16px; right: 16px; z-index: 20; border: 1px solid #2b3540; background: #161c22; color: #e7edf3; border-radius: 8px; font-size: 12px; padding: 6px 10px; cursor: pointer; }
+  .pick:hover { background: #1e262e; }
+  #hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; background: rgba(16,20,24,.7); border: 1px solid #2b3540; border-radius: 30px; padding: 8px 16px; font-size: 12px; color: #93a1ad; white-space: nowrap; transition: opacity .4s; pointer-events: none; }
+  #hint b { color: #e7edf3; }
+  #hint.fade { opacity: 0; }
+</style>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
 </head>
 <body>
+  <model-viewer id="mv" src="./mops.glb" alt="3D-модель мопса" camera-controls touch-action="pan-y" exposure="1" shadow-intensity="1" shadow-softness="0.9" interaction-prompt="auto" style="background:transparent;"></model-viewer>
+  <button id="pick" class="pick">👆 Выбрать элемент</button>
+  <div id="panel">
+    <div class="head">
+      <div class="badge">M</div>
+      <div><h1>Мопс</h1><div class="sub" id="count-line">Загрузка…</div></div>
+    </div>
+    <div class="actions"><button id="btn-all">Показать всё</button><button id="btn-none">Скрыть всё</button></div>
+    <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
+    <div class="foot"><span id="visible-count">0 / 0</span> элементов видимо</div>
+  </div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>колесо</b> — масштаб · <b>ПКМ</b> — панорама</div>
 
-    <!-- Загружаем модель mops.glb напрямую из вашего репозитория -->
-    <model-viewer src="./mops.glb" camera-controls shadow-intensity="1" environment-image="neutral" exposure="1">
-    </model-viewer>
+  <script type="module">
+    const mv = document.getElementById('mv');
+    const listEl = document.getElementById('list');
+    const pickBtn = document.getElementById('pick');
+    const parts = [];
 
+    function refresh(){
+      listEl.innerHTML = '';
+      parts.forEach(p => {
+        const el = document.createElement('div');
+        el.className = 'item on';
+        el.innerHTML = '<span class="check"></span><span class="name"></span>';
+        el.querySelector('.name').textContent = p.name;
+        el.addEventListener('click', () => toggle(p));
+        p.el = el;
+        listEl.appendChild(el);
+      });
+      document.getElementById('count-line').textContent = parts.length + (parts.length === 1 ? ' элемент' : ' элементов') + ' в модели';
+      updateCount();
+    }
+    function toggle(p){
+      p.visible = !p.visible;
+      p.node.visible = p.visible;
+      p.el.classList.toggle('on', p.visible);
+      p.el.classList.toggle('off', !p.visible);
+      updateCount();
+    }
+    function updateCount(){
+      document.getElementById('visible-count').textContent = `${parts.filter(p => p.visible).length} / ${parts.length}`;
+    }
+    function buildFromNodes(){
+      const nodes = mv.model?.nodes || [];
+      parts.length = 0;
+      nodes.forEach(n => parts.push({ node: n, name: n.name || 'Элемент', visible: true }));
+      if (parts.length === 0){
+        listEl.innerHTML = '<div class="empty">Модель разбита на 1 часть.<br>Включите «Выбрать элемент», чтобы указать нужные.</div>';
+      } else refresh();
+    }
+    mv.addEventListener('load', () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => buildFromNodes()));
+      setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
+    });
+    let picking = false;
+    pickBtn.addEventListener('click', () => {
+      picking = !picking;
+      pickBtn.style.borderColor = picking ? '#3fa9f5' : '#2b3540';
+      pickBtn.style.color = picking ? '#3fa9f5' : '#e7edf3';
+    });
+    mv.addEventListener('click', (e) => {
+      if (!picking) return;
+      const hit = mv.hitTest?.(e.clientX, e.clientY);
+      if (hit && hit.length){
+        const name = hit[0].node?.name;
+        const p = parts.find(x => x.name === name);
+        if (p) toggle(p);
+      }
+    });
+    document.getElementById('btn-all').onclick = () => { parts.forEach(p => { p.node.visible = p.visible = true; p.el.classList.add('on'); p.el.classList.remove('off'); }); updateCount(); };
+    document.getElementById('btn-none').onclick = () => { parts.forEach(p => { p.node.visible = p.visible = false; p.el.classList.remove('on'); p.el.classList.add('off'); }); updateCount(); };
+  </script>
 </body>
 </html>
