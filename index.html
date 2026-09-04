@@ -82,11 +82,7 @@
   .ao-block{margin-top:4px;padding-top:8px;border-top:1px dashed var(--border);}
   .ao-toggle label{flex:none;cursor:pointer;color:var(--text);font-weight:500;}
   .ao-toggle input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
-  .preset{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
-  .preset button{border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:11px;padding:6px 4px;border-radius:7px;cursor:pointer;transition:background .12s;}
-  .preset button:hover{background:#26303a;border-color:var(--accent);}
-  .filebtn{display:block;width:100%;text-align:center;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:8px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;font-weight:500;}
-  .filebtn:hover{background:#26303a;border-color:var(--accent);}
+  .online{color:var(--muted);font-size:11px;line-height:1.4;}
 
   @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
 </style>
@@ -134,23 +130,7 @@
     <div class="light-section">
       <h4>Ambient Occlusion (N8AO)</h4>
       <div class="ctl ao-toggle"><input type="checkbox" id="ao-enable" checked><label for="ao-enable">Включить AO</label></div>
-      <div class="ctl"><label>Расстояние, мм</label><input type="range" id="ao-radius" min="1" max="3000" step="1" value="200"><span class="val" id="v-ao-radius">200</span></div>
-      <div class="ctl"><label>Фактор (тень)</label><input type="range" id="ao-int" min="0" max="10" step="0.01" value="5"><span class="val" id="v-ao-int">5.00</span></div>
-      <div class="ctl"><label>Точность (сэмплы)</label><input type="range" id="ao-samples" min="4" max="64" step="1" value="16"><span class="val" id="v-ao-samples">16</span></div>
-      <div class="ctl ao-toggle"><input type="checkbox" id="ao-only"><label for="ao-only">Только AO</label></div>
-      <div class="preset">
-        <button data-preset="d">Детали</button>
-        <button data-preset="m">Средне</button>
-        <button data-preset="g">Глобально</button>
-      </div>
-    </div>
-
-    <div class="light-section">
-      <h4>Окружение / HDRI</h4>
-      <div class="ctl ao-toggle"><label class="filebtn" for="hdri-file">Загрузить HDRI<input type="file" id="hdri-file" accept=".hdr,.exr" hidden></label></div>
-      <div class="ctl"><label>Яркость</label><input type="range" id="hdri-bright" min="0" max="6" step="0.01" value="1"><span class="val" id="v-hdri-bright">1.00</span></div>
-      <div class="ctl ao-toggle"><input type="checkbox" id="hdri-bg"><label for="hdri-bg">HDRI как фон</label></div>
-      <div class="ctl ao-toggle"><input type="checkbox" id="hdri-only"><label for="hdri-only">Освещение только из HDRI</label></div>
+      <div class="ctl"><span class="online">Пресет «Детали» — радиус 100 мм · фактор 10 · точность 24</span></div>
     </div>
 
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
@@ -180,8 +160,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
@@ -204,7 +182,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 /* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x14181d);
+scene.background = new THREE.Color(0xffffff);   // белый фон
 
 // IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
 // чтобы не было «чёрной стороны» у блестящих материалов.
@@ -256,13 +234,13 @@ window.__n8ao = n8ao;
 
 // N8AO сам делает гамма-коррекцию (outputColorSpace), поэтому финального
 // OutputPass не нужно. Параметры берем из панели (см. applyAO ниже).
-n8ao.configuration.aoRadius = 200;            // Расстояние, мм (мировые юниты)
+n8ao.configuration.aoRadius = 100;            // Расстояние, мм (мировые юниты) — «Детали»
 n8ao.configuration.distanceFalloff = 1.0;
-n8ao.configuration.aoSamples = 16;            // Точность
+n8ao.configuration.aoSamples = 24;            // Точность — «Детали»
 n8ao.configuration.denoiseSamples = 8;
 n8ao.configuration.denoiseRadius = 12;
 n8ao.configuration.denoiseIterations = 2;
-n8ao.configuration.intensity = 5.0;           // Фактор (контраст затемнения)
+n8ao.configuration.intensity = 10.0;          // Фактор (контраст затемнения) — «Детали»
 n8ao.configuration.screenSpaceRadius = false; // мировой радиус
 n8ao.configuration.gammaCorrection = true;
 n8ao.configuration.renderMode = 0;            // 0 = Combined (красота + AO)
@@ -473,120 +451,25 @@ function addGround(center, maxDim, floorY){
 }
 
 /* ---------- Настройки Ambient Occlusion (N8AO) ----------
-   Расстояние, мм → aoRadius (мировые единицы); Фактор → intensity (контраст);
-   Точность → aoSamples. «Только AO» → renderMode=1 (вывод маски AO). */
+   Фиксированный пресет «Детали»: радиус 100 мм, контраст (intensity) 10,
+   точность 24 сэмпла. Ползунки не используются. */
 const $id = id => document.getElementById(id);
 const aoEnable  = $id('ao-enable');
-const aoInt     = $id('ao-int');      // Фактор (тень)
-const aoRadius  = $id('ao-radius');   // Расстояние, мм
-const aoSamples = $id('ao-samples');  // Точность
-const aoOnly    = $id('ao-only');     // Только AO
 
-const aoInputs = [aoInt, aoRadius, aoSamples, aoOnly];
+const AO_DETAILS = { radius: 100, intensity: 10.0, samples: 24 };
 
 function applyAO(){
   const on = aoEnable.checked;
   if (n8ao){
-    n8ao.configuration.aoRadius   = Math.max(1, parseFloat(aoRadius.value));  // мм (мировые юниты)
-    n8ao.configuration.aoSamples  = Math.max(4, Math.min(64, Math.round(parseFloat(aoSamples.value))));
-    n8ao.configuration.intensity  = on ? parseFloat(aoInt.value) : 0;         // контраст затемнения
-    n8ao.configuration.renderMode = aoOnly.checked ? 1 : 0;                   // 1 = выводить только AO
+    n8ao.configuration.aoRadius   = AO_DETAILS.radius;                // мм (мировые юниты)
+    n8ao.configuration.aoSamples  = AO_DETAILS.samples;
+    n8ao.configuration.intensity  = on ? AO_DETAILS.intensity : 0;    // контраст затемнения
+    n8ao.configuration.renderMode = 0;                                // Combined (красота + AO)
   }
   needsRender = true;
-  $id('v-ao-radius').textContent  = Math.round(aoRadius.value);
-  $id('v-ao-int').textContent     = parseFloat(aoInt.value).toFixed(2);
-  $id('v-ao-samples').textContent = Math.round(aoSamples.value);
-  aoInputs.forEach(el => el.disabled = !on);
 }
 aoEnable.addEventListener('change', applyAO);
-aoInputs.forEach(el => el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', applyAO));
 applyAO();
-
-// Быстрые пресеты; Детали = акцент на стыках/рёбрах 20–40 мм
-document.querySelectorAll('.preset button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const p = btn.dataset.preset;
-    const set = (r, i, s) => {
-      $id('ao-radius').value = r; $id('v-ao-radius').textContent = r;
-      $id('ao-int').value = i;   $id('v-ao-int').textContent = parseFloat(i).toFixed(2);
-      $id('ao-samples').value = s; $id('v-ao-samples').textContent = s;
-      applyAO();
-    };
-    if (p === 'd') set(150, 6.0, 24);   // детали: малый радиус + больше сэмплов, сильный контраст
-    else if (p === 'm') set(300, 5.0, 16);
-    else set(700, 4.5, 16);             // глобально: широкий радиус
-  });
-});
-
-/* ---------- Окружение / HDRI ---------- */
-const hdriFile   = $id('hdri-file');
-const hdriBright = $id('hdri-bright');
-const hdriBg     = $id('hdri-bg');
-const hdriOnly   = $id('hdri-only');
-
-const HEMI_INT = hemiLight.intensity;            // 1.0
-const AMB_INT  = ambient.intensity;              // 0.32
-const DIR_INT  = shadowRig.map(l => l.intensity);// [1.4,0.8,0.8]
-const DEFAULT_BG = scene.background;             // тёмный фон по умолчанию
-const builtinLights = [hemiLight, ambient, ...shadowRig];
-
-let hdriLoaded = false;
-let hdriEquirect = null;                          // исходная equirect-текстура для фона
-
-function setBuiltinLighting(scale){
-  hemiLight.intensity = HEMI_INT * scale;
-  ambient.intensity   = AMB_INT  * scale;
-  shadowRig.forEach((l, i) => { l.intensity = DIR_INT[i] * scale; });
-}
-
-function applyHdriBright(){
-  const v = parseFloat(hdriBright.value);
-  scene.environmentIntensity = v;   // яркость IBL (освещения из HDRI)
-  scene.backgroundIntensity  = v;   // яркость фона, если HDRI включён как фон
-  $id('v-hdri-bright').textContent = v.toFixed(2);
-  needsRender = true;
-}
-
-function applyHdri(){
-  const on = hdriLoaded;
-  // Только из HDRI = гасим встроенные источники, чтобы свет шёл исключительно от карты.
-  const scale = (on && hdriOnly.checked) ? 0 : 1;
-  setBuiltinLighting(scale);
-  scene.background = (on && hdriBg.checked && hdriEquirect) ? hdriEquirect : DEFAULT_BG;
-  hdriBright.disabled = !on;
-  hdriBg.disabled     = !on;
-  hdriOnly.disabled   = !on;
-  applyHdriBright();
-  needsRender = true;
-}
-
-hdriFile.addEventListener('change', () => {
-  const file = hdriFile.files && hdriFile.files[0];
-  if (!file) return;
-  const isHdr = /\.hdr$/i.test(file.name);
-  const isExr = /\.exr$/i.test(file.name);
-  if (!isHdr && !isExr){ alert('Поддерживаются файлы .hdr и .exr'); return; }
-  const loader = isHdr ? new RGBELoader() : new EXRLoader();
-  loader.load(URL.createObjectURL(file), (tex) => {
-    tex.mapping = THREE.EquirectangularReflectionMapping;
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const envRT = pmrem.fromEquirectangular(tex);
-    scene.environment = envRT.texture;   // IBL (освещение HDRI)
-    hdriEquirect = tex;                  // фон (equirect)
-    hdriLoaded = true;
-    hdriOnly.checked = true;             // сразу делаем HDRI единственным источником
-    pmrem.dispose();
-    applyHdri();
-  }, undefined, (err) => {
-    console.error(err);
-    alert('Не удалось загрузить HDRI. Проверьте файл.');
-  });
-});
-
-hdriBright.addEventListener('input', applyHdriBright);
-hdriBg.addEventListener('change', applyHdri);
-hdriOnly.addEventListener('change', applyHdri);
-applyHdri();
 
 /* ---------- Загрузка ---------- */
 const loader = new GLTFLoader();
@@ -724,5 +607,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3607ce1a8bc7dfc',t:'MTc4ODU2MTU0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a360b4dc2b9dc03a',t:'MTc4ODU2MzgzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
