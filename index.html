@@ -130,14 +130,14 @@
     <div class="light-section">
       <h4>Окклюзия окружения (GTAO)</h4>
       <div class="ctl ao-toggle"><input type="checkbox" id="ao-enable" checked><label for="ao-enable">Включить AO</label></div>
-      <div class="ctl"><label>Интенсивность</label><input type="range" id="ao-int" min="0" max="300" step="1" value="150"><span class="val" id="v-ao-int">150%</span></div>
-      <div class="ctl"><label>Радиус (расстояние)</label><input type="range" id="ao-radius" min="0.005" max="0.5" step="0.005" value="0.01"><span class="val" id="v-ao-radius">0.01</span></div>
-      <div class="ctl"><label>Масштаб (scale)</label><input type="range" id="ao-scale" min="0.01" max="2" step="0.01" value="1.2"><span class="val" id="v-ao-scale">1.20</span></div>
-      <div class="ctl"><label>Толщина (thickness)</label><input type="range" id="ao-thick" min="0.1" max="10" step="0.1" value="1.5"><span class="val" id="v-ao-thick">1.50</span></div>
-      <div class="ctl"><label>Степень расстояния</label><input type="range" id="ao-dexp" min="1" max="4" step="0.01" value="1.35"><span class="val" id="v-ao-dexp">1.35</span></div>
-      <div class="ctl"><label>Затухание (falloff)</label><input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.9"><span class="val" id="v-ao-falloff">0.90</span></div>
-      <div class="ctl"><label>Сэмплы</label><input type="range" id="ao-samples" min="2" max="32" step="1" value="24"><span class="val" id="v-ao-samples">24</span></div>
-      <div class="ctl ao-toggle"><input type="checkbox" id="ao-ssradius" checked><label for="ao-ssradius">Экранный радиус</label></div>
+      <div class="ctl"><label>Интенсивность</label><input type="range" id="ao-int" min="0" max="500" step="1" value="500"><span class="val" id="v-ao-int">500%</span></div>
+      <div class="ctl"><label>Радиус (расстояние)</label><input type="range" id="ao-radius" min="0.01" max="2.0" step="0.01" value="0.2"><span class="val" id="v-ao-radius">0.20</span></div>
+      <div class="ctl"><label>Масштаб (scale)</label><input type="range" id="ao-scale" min="0.01" max="2" step="0.01" value="1.0"><span class="val" id="v-ao-scale">1.00</span></div>
+      <div class="ctl"><label>Толщина (thickness)</label><input type="range" id="ao-thick" min="0.1" max="10" step="0.1" value="1.0"><span class="val" id="v-ao-thick">1.00</span></div>
+      <div class="ctl"><label>Степень расстояния</label><input type="range" id="ao-dexp" min="1" max="4" step="0.01" value="1.00"><span class="val" id="v-ao-dexp">1.00</span></div>
+      <div class="ctl"><label>Затухание (falloff)</label><input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="1.00"><span class="val" id="v-ao-falloff">1.00</span></div>
+      <div class="ctl"><label>Сэмплы</label><input type="range" id="ao-samples" min="2" max="32" step="1" value="32"><span class="val" id="v-ao-samples">32</span></div>
+      <div class="ctl ao-toggle"><input type="checkbox" id="ao-ssradius"><label for="ao-ssradius">Экранный радиус</label></div>
       <div class="ctl ao-toggle"><input type="checkbox" id="ao-only"><label for="ao-only">Только AO</label></div>
     </div>
 
@@ -193,19 +193,10 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x14181d);
 
-// IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
-// чтобы не было «чёрной стороны» у блестящих материалов.
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
 pmrem.dispose();
 
-/* ---------- СВЕТ: купол + ambient ----------
-   HemisphereLight = «купол» (dome light): сверху светлее, снизу — мягкая
-   подсветка. Даёт равномерное объёмное свечение со всех сторон.
-   AmbientLight добавляет базовую заливку, чтобы тени не были чёрными.
-   DirectionalLight оставлен слабым — только для мягкой тени и объёма. */
-/* Нейтральное стандартное освещение (фиксированное, без регуляторов):
-   мягкий купол + базовая заливка + один направленный для объёма и тени. */
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8a929b, 1.1);
 scene.add(hemiLight);
 
@@ -216,7 +207,6 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
 dirLight.castShadow = true;
 scene.add(dirLight);
 
-// Мягкая встречная подсветка, чтобы детали не тонули в тени
 const fill = new THREE.DirectionalLight(0xbfd4ff, 0.3);
 fill.position.set(-3000, 1000, -4000);
 scene.add(fill);
@@ -228,10 +218,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = true;
 
-/* ---------- Постобработка: GTAO (затенение в углах) ----------
-   GTAO — Ground Truth Ambient Occlusion (как в примерах three.js по ссылкам).
-   Расстояние → radius, Интенсивность → blendIntensity. GTAO сам обновляет
-   near/far камеры и пакует глубину надёжнее, поэтому не даёт «белого». */
+/* ---------- Постобработка: GTAO ---------- */
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
@@ -240,22 +227,19 @@ const gtaoPass = new GTAOPass(
   scene, camera, window.innerWidth, window.innerHeight
 );
 
-// ВАЖНО: Default — именно AO поверх обычного материала.
-// Denoise используется только для режима «Только AO».
 gtaoPass.output = GTAOPass.OUTPUT.Default;
-gtaoPass.blendIntensity = 1.0;
+gtaoPass.blendIntensity = 5.0; // Изменено под Factor = 5.0 из Blender
 
 gtaoPass.updateGtaoMaterial({
-  radius: 0.015,
-  distanceExponent: 1.35,
-  thickness: 1.5,
-  scale: 1.2,
-  samples: 24,
-  distanceFallOff: 0.9,
-  screenSpaceRadius: true
+  radius: 0.2, // Изменено под 200 мм (0.2 метра)
+  distanceExponent: 1.0,
+  thickness: 1.0,
+  scale: 1.0,
+  samples: 32, // Подняли сэмплы для сглаживания швов
+  distanceFallOff: 1.0,
+  screenSpaceRadius: false // ОТКЛЮЧЕНО по умолчанию для фиксации в метрах
 });
 
-// Минимальное сглаживание сохраняет контактные тени и мелкие углубления.
 gtaoPass.updatePdMaterial({
   lumaPhi: 4,
   depthPhi: 1.5,
@@ -278,9 +262,9 @@ const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,
 let modelCenter = new THREE.Vector3();
 let modelMaxDim = 1;
 let cameraDist  = 1;
-let modelRoot   = null;   // корень модели (для габаритов без учёта пола)
-let groundPlane = null;   // пол с контактной тенью
-let modelBox    = null;   // габариты модели для AO clip-box
+let modelRoot   = null;
+let groundPlane = null;
+let modelBox    = null;
 
 function updateCount(){
   const v = parts.filter(p => p.object.visible).length;
@@ -318,7 +302,7 @@ function toggle(p){
   pushHistory(prev);
 }
 
-/* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
+/* ---------- История ---------- */
 const undoStack = [];
 const redoStack = [];
 const btnUndo = document.getElementById('btn-undo');
@@ -366,7 +350,6 @@ function updateButtons(){
 btnUndo.addEventListener('click', undo);
 btnRedo.addEventListener('click', redo);
 
-// Горячие клавиши
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')){
@@ -392,7 +375,6 @@ function collectParts(root){
         o.receiveShadow = true;
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(m => {
-          // Нейтральные отражения окружения (как в примере)
           m.envMapIntensity = 0.7;
           m.needsUpdate = true;
         });
@@ -410,7 +392,6 @@ function collectParts(root){
 
 /* ---------- Подгонка камеры ---------- */
 function fitCamera(){
-  // Габариты считаем только по модели, чтобы пол не попадал в расчёт
   const box = new THREE.Box3().setFromObject(modelRoot || scene);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
@@ -426,21 +407,17 @@ function fitCamera(){
   cameraDist = dist;
   const dirV = new THREE.Vector3(0.6, 0.45, 0.7).normalize();
   camera.position.copy(center).addScaledVector(dirV, dist);
-  // Тщательно подбираем near/far под размер модели:
-  // большой разброс «сжимает» глубину и ломает screen-space AO и тени.
   camera.near = Math.max(0.0001, maxDim * 0.002);
   camera.far  = Math.max(10, maxDim * 20);
   camera.updateProjectionMatrix();
   modelBox = box.clone();
-   // Небольшой запас не даёт AO обрезаться на границах модели.
-   const aoPad = maxDim * 0.02;
-   modelBox.expandByScalar(aoPad);   // для setSceneClipBox
+  const aoPad = maxDim * 0.02;
+  modelBox.expandByScalar(aoPad);
   controls.target.copy(center);
   controls.minDistance = maxDim * 0.05;
   controls.maxDistance = maxDim * 5;
   controls.update();
 
-  // Теневая камера покрывает модель
   dirLight.position.set(center.x + maxDim, center.y + maxDim, center.z + maxDim);
   dirLight.target.position.copy(center);
   scene.add(dirLight.target);
@@ -455,9 +432,6 @@ function fitCamera(){
   dirLight.shadow.normalBias = maxDim * 0.0003;
 }
 
-/* ---------- Пол с контактной тенью ----------
-   Прозрачная плоскость, которая ловит тень от модели и «ставит» её на
-   землю — главный признак фотореализма (объект больше не висит в воздухе). */
 function addGround(center, maxDim, floorY){
   if (groundPlane){ scene.remove(groundPlane); groundPlane = null; }
   const geo = new THREE.PlaneGeometry(maxDim * 6, maxDim * 6);
@@ -469,10 +443,7 @@ function addGround(center, maxDim, floorY){
   scene.add(groundPlane);
 }
 
-/* ---------- Настройки Ambient Occlusion (GTAO) ----------
-   Все параметры — как в примере webgpu_postprocessing_ao:
-   radius, scale, thickness, distanceExponent, distanceFallOff, samples,
-   screenSpaceRadius, blendIntensity (Интенсивность), aoOnly. */
+/* ---------- Настройки Ambient Occlusion (GTAO) ---------- */
 const $id = id => document.getElementById(id);
 const aoEnable   = $id('ao-enable');
 const aoInt      = $id('ao-int');
@@ -490,17 +461,9 @@ const aoInputs = [aoInt,aoRadius,aoScale,aoThick,aoDexp,aoFalloff,aoSamples,aoSS
 function applyAO(){
   const on = aoEnable.checked;
   gtaoPass.enabled = on;
-  const D = modelMaxDim || 1;
-  // Для архитектуры большой радиус по габариту здания превращает AO
-  // в «тень от куба». Используем нелинейное преобразование: ползунок
-  // остаётся удобным, но рабочий радиус остаётся локальным относительно
-  // каркаса/стыка панелей. При включённом screenSpaceRadius three.js
-  // дополнительно стабилизирует размер эффекта относительно экрана.
-  const sliderRadius = parseFloat(aoRadius.value);
-  const localRadius = Math.max(0.00005, Math.pow(sliderRadius, 1.65) * D * 0.22);
 
   gtaoPass.updateGtaoMaterial({
-    radius:            localRadius,
+    radius:            parseFloat(aoRadius.value),
     distanceExponent:  parseFloat(aoDexp.value),
     distanceFallOff:   parseFloat(aoFalloff.value),
     thickness:         parseFloat(aoThick.value),
@@ -508,7 +471,7 @@ function applyAO(){
     samples:           Math.round(parseFloat(aoSamples.value)),
     screenSpaceRadius: aoSSRadius.checked
   });
-  // Интенсивность: до 300%, бьёт в blendIntensity до 3.0 (раньше был макс 1.0)
+
   gtaoPass.blendIntensity = on ? (parseFloat(aoInt.value) / 100) : 0;
   gtaoPass.output = aoOnly.checked ? GTAOPass.OUTPUT.Denoise : GTAOPass.OUTPUT.Default;
 
@@ -540,7 +503,7 @@ loader.load('./mops.glb',
     fitCamera();
     updateCount();
     if (modelBox) gtaoPass.setSceneClipBox(modelBox);
-    applyAO();   // пересчёт порогов под реальный размер модели
+    applyAO();
     overlay.classList.add('gone');
     setTimeout(() => overlay.remove(), 600);
     setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
@@ -551,7 +514,7 @@ loader.load('./mops.glb',
     overlay.querySelector('.spinner').style.display = 'none';
     loadMsg.style.display = 'none';
     loadErr.style.display = 'block';
-    loadErr.textContent = 'Не удалось загрузить модель. Если открыли файл напрямую (file://), браузер блокирует загрузку — опубликуйте на GitHub Pages или запустите локальный сервер.';
+    loadErr.textContent = 'Не удалось загрузить модель. Если открыли файл напрямую (file://), браузер блокирует загрузку — опубликуйте на GitHub Pages или запустите локальный server.';
   }
 );
 
@@ -625,9 +588,6 @@ document.querySelectorAll('.face').forEach(f => {
 });
 
 function updateViewCube(){
-  // three.js — правая система (Y вверх); CSS 3D — правая система (Y вниз).
-  // Обратный поворот камеры + сопряжение отражения по Y (S·R·S),
-  // чтобы куб вращался синхронно с камерой и показывал нужные грани.
   tmpBasis.makeRotationFromQuaternion(camera.quaternion);
   tmpBasis.invert();
   const e = tmpBasis.elements;
@@ -654,5 +614,5 @@ renderer.setAnimationLoop(() => {
   composer.render();
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a35fddb15a4dbc1b',t:'MTc4ODU1NTAyMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
