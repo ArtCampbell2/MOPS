@@ -2,22 +2,27 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>3D Презентация</title>
+    <title>3D Презентация (Babylon.js)</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
-        #canvas-container { width: 100vw; height: 100vh; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
         #ui-panel {
-            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8);
+            position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.85);
             padding: 15px; border-radius: 8px; color: #fff; max-height: 80vh; overflow-y: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 10; width: 220px;
         }
-        .toggle-btn { display: block; margin: 8px 0; padding: 6px 12px; background: #333; 
-                      border: 1px solid #555; color: white; border-radius: 4px; cursor: pointer; text-align: left;}
-        .toggle-btn.hidden { background: #8b0000; text-decoration: line-through; color: #aaa; }
+        h3 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 8px; font-size: 16px; }
+        .toggle-btn { 
+            display: block; width: 100%; margin: 6px 0; padding: 8px 10px; background: #2a2a2a; 
+            border: 1px solid #444; color: white; border-radius: 4px; cursor: pointer; 
+            text-align: left; font-size: 13px; transition: background 0.2s;
+        }
+        .toggle-btn:hover { background: #3a3a3a; }
+        .toggle-btn.hidden { background: #5c1d1d; text-decoration: line-through; color: #999; border-color: #7a2222; }
     </style>
-    <!-- Подключаем Three.js и загрузчик GLTF -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
+    <!-- Подключаем Babylon.js и загрузчик GLTF -->
+    <script src="https://babylonjs.com"></script>
+    <script src="https://babylonjs.com"></script>
 </head>
 <body>
 
@@ -25,70 +30,80 @@
         <h3>Элементы модели</h3>
         <div id="buttons-list"></div>
     </div>
-    <div id="canvas-container"></div>
+    <canvas id="renderCanvas"></canvas>
 
     <script>
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x1a1a1a);
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
 
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 2, 5);
+        const createScene = function () {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1); // Темно-серый фон
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
-        container.appendChild(renderer.domElement);
-
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-
-        // Свет
-        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 10, 7);
-        scene.add(dirLight);
-
-        // Загрузка вашей модели прямо из корня репозитория
-        const loader = new THREE.GLTFLoader();
-        loader.load('untitled.glb', function(gltf) {
-            const model = gltf.scene;
-            scene.add(model);
-
-            // Центрируем камеру по размеру модели
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            controls.target.copy(center);
-
-            // Ищем все главные меши и создаем для них кнопки переключения
-            const buttonsList = document.getElementById('buttons-list');
-            model.traverse(function(object) {
-                if (object.isMesh && object.name) {
-                    const btn = document.createElement('button');
-                    btn.className = 'toggle-btn';
-                    btn.innerText = '👁 ' + object.name;
-                    btn.onclick = function() {
-                        object.visible = !object.visible;
-                        btn.classList.toggle('hidden');
-                    };
-                    buttonsList.appendChild(btn);
-                }
+            // Создаем дефолтное освещение и окружение (чтобы текстуры и металл блестели как надо)
+            const environment = scene.createDefaultEnvironment({
+                createGround: false,
+                createSkybox: false
             });
 
-        }, undefined, function(error) { console.error(error); });
+            // Камера с управлением мышью/пальцем
+            const camera = new BABYLON.ArcRotateCamera("camera", THREE = -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+            camera.attachControl(canvas, true);
+            camera.wheelDeltaPercentage = 0.01; // Плавный зум
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
-        animate();
+            // Дополнительный мягкий свет, чтобы не было черных теней
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            // Загружаем вашу модельuntitled.glb напрямую из репозитория
+            BABYLON.SceneLoader.Append("", "untitled.glb", scene, function (scene) {
+                
+                // Автоматически настраиваем камеру под габариты вашей модели
+                scene.executeWhenReady(function () {
+                    camera.useAutoRotationBehavior = false;
+                    
+                    // Собираем корневые меши для создания кнопок управления
+                    const buttonsList = document.getElementById('buttons-list');
+                    
+                    // Проходимся по всем мешам в сцене
+                    scene.meshes.forEach(function(mesh) {
+                        // Игнорируем системные меши Вавилона и берем только объекты модели с именами
+                        if (mesh.name && !mesh.name.includes("Background") && mesh.id !== "____gltf_root____") {
+                            // Проверяем, есть ли у меша геометрия (чтобы не добавлять пустые группы-пустышки)
+                            if (mesh.getTotalVertices() > 0) {
+                                const btn = document.createElement('button');
+                                btn.className = 'toggle-btn';
+                                btn.innerText = '👁 ' + mesh.name;
+                                
+                                btn.onclick = function() {
+                                    // Переключаем видимость (включая все дочерние элементы, если они есть)
+                                    mesh.setEnabled(!mesh.isEnabled());
+                                    btn.classList.toggle('hidden');
+                                };
+                                buttonsList.appendChild(btn);
+                            }
+                        }
+                    });
+                    
+                    // Фокусируем камеру строго по центру объекта
+                    camera.setTarget(BABYLON.Vector3.Zero());
+                });
+                
+            }, null, function (error) {
+                console.error("Ошибка загрузки модели:", error);
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
         });
     </script>
 </body>
