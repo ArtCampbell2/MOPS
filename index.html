@@ -70,6 +70,45 @@
   #overlay .msg{font-size:14px;}
   #overlay .err{color:#e5484d;max-width:440px;text-align:center;line-height:1.5;display:none;}
 
+  /* ---------- Круглый курсор ---------- */
+  #canvas{cursor:none;}
+  #cursor-ring{
+    position:fixed;left:0;top:0;width:26px;height:26px;border-radius:50%;
+    border:2px solid rgba(63,169,245,.9);
+    box-shadow:0 0 8px rgba(63,169,245,.5), inset 0 0 5px rgba(63,169,245,.35);
+    transform:translate(-50%,-50%);
+    pointer-events:none;z-index:9000;
+    opacity:0;transition:width .15s,height .15s,border-color .15s,opacity .2s,background .15s;
+  }
+  #cursor-ring.center{position:fixed;left:0;top:0;}
+  #cursor-ring.over{width:36px;height:36px;border-color:#fff;background:rgba(63,169,245,.15);}
+
+  /* ---------- Рябь (как капля в воде) ---------- */
+  #ripple-layer{position:fixed;inset:0;pointer-events:none;z-index:8999;overflow:hidden;}
+  .ripple{
+    position:absolute;border-radius:50%;
+    border:2px solid rgba(63,169,245,.85);
+    transform:translate(-50%,-50%) scale(.25);opacity:.95;
+    animation:ripple .8s cubic-bezier(.25,.8,.3,1) forwards;
+  }
+  @keyframes ripple{
+    0%{transform:translate(-50%,-50%) scale(.25);opacity:.95;}
+    100%{transform:translate(-50%,-50%) scale(1);opacity:0;}
+  }
+
+  /* ---------- Освещение: настройки ---------- */
+  .light-section{padding:10px 14px;border-top:1px solid var(--border);}
+  .light-section h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
+  .ctl{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;color:var(--muted);}
+  .ctl label{flex:1;}
+  .ctl input[type=range]{flex:2;-webkit-appearance:none;appearance:none;height:5px;border-radius:5px;background:var(--panel2);outline:none;cursor:pointer;}
+  .ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
+  .ctl input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
+  .ctl .val{width:34px;text-align:right;color:var(--text);}
+  .preset{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
+  .preset button{border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:11px;padding:6px 4px;border-radius:7px;cursor:pointer;transition:background .12s;}
+  .preset button:hover{background:#26303a;border-color:var(--accent);}
+
   @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
 </style>
 
@@ -85,6 +124,8 @@
 <body>
 <div id="app">
   <canvas id="canvas"></canvas>
+  <div id="ripple-layer"></div>
+  <div id="cursor-ring"></div>
 
   <div id="panel">
     <div class="head">
@@ -110,6 +151,23 @@
       </div>
     </div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
+
+    <div class="light-section">
+      <h4>Освещение</h4>
+      <div class="ctl"><label>Ambient (фон)</label><input type="range" id="l-amb" min="0" max="2.5" step="0.05" value="0.45"><span class="val" id="v-amb">0.45</span></div>
+      <div class="ctl"><label>Купол / небо</label><input type="range" id="l-hemi" min="0" max="4" step="0.05" value="1.9"><span class="val" id="v-hemi">1.9</span></div>
+      <div class="ctl"><label>Направл. (тени)</label><input type="range" id="l-dir" min="0" max="3" step="0.05" value="0.9"><span class="val" id="v-dir">0.9</span></div>
+      <div class="ctl"><label>Экспозиция</label><input type="range" id="l-exp" min="0.3" max="2.5" step="0.05" value="1.05"><span class="val" id="v-exp">1.05</span></div>
+      <div class="preset">
+        <button data-preset="studio">Студия</button>
+        <button data-preset="sunny">Солнце</button>
+        <button data-preset="night">Ночь</button>
+        <button data-preset="neutral">Нейтр.</button>
+        <button data-preset="photo">Фото</button>
+        <button data-preset="dim">Приглуш.</button>
+      </div>
+    </div>
+
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
 
@@ -364,6 +422,46 @@ function fitCamera(){
   dir.shadow.normalBias = maxDim * 0.0003;
 }
 
+/* ---------- Управление освещением ----------
+   Вы можете менять световую щёлкая ползунки в панели «Освещение»
+   (Ambient = равномерная заливка, Купол/небо = Hemisphere, Направл. = тени).
+   Экспозиция управляет общей яркостью. Пресеты резко меняют характер сцены. */
+const lAmb = document.getElementById('l-amb');
+const lHemi = document.getElementById('l-hemi');
+const lDir = document.getElementById('l-dir');
+const lExp = document.getElementById('l-exp');
+const vAmb = document.getElementById('v-amb');
+const vHemi = document.getElementById('v-hemi');
+const vDir = document.getElementById('v-dir');
+const vExp = document.getElementById('v-exp');
+
+function setLight({amb:a, hemi:h, dir:d, exp:e}){
+  lAmb.value = a; lHemi.value = h; lDir.value = d; lExp.value = e;
+  vAmb.textContent = a.toFixed(2); vHemi.textContent = h.toFixed(2);
+  vDir.textContent = d.toFixed(2); vExp.textContent = e.toFixed(2);
+  ambient.intensity = a;
+  hemi.intensity = h;
+  dir.intensity = d;
+  renderer.toneMappingExposure = e;
+}
+const setAll = () => setLight({amb:+lAmb.value, hemi:+lHemi.value, dir:+lDir.value, exp:+lExp.value});
+lAmb.addEventListener('input', setAll);
+lHemi.addEventListener('input', setAll);
+lDir.addEventListener('input', setAll);
+lExp.addEventListener('input', setAll);
+
+const presets = {
+  studio:  { amb:0.45, hemi:1.9, dir:0.9, exp:1.05 },  // наш текущий сбалансированный
+  sunny:   { amb:0.15, hemi:1.6, dir:2.6, exp:1.15 },  // жёсткое «солнце»
+  night:   { amb:0.06, hemi:0.35, dir:0.15, exp:1.6 }, // тёмная, холодная
+  neutral: { amb:0.7,  hemi:2.2, dir:0.5, exp:1.0 },   // плоский, без теней
+  photo:   { amb:0.35, hemi:2.0, dir:1.2, exp:1.1 },   // «фотореализм»: баланс + мягкие тени
+  dim:     { amb:0.25, hemi:1.2, dir:0.6, exp:0.85 }   // приглушённый
+};
+document.querySelectorAll('.preset button').forEach(btn => {
+  btn.addEventListener('click', () => setLight(presets[btn.dataset.preset]));
+});
+
 /* ---------- Загрузка ---------- */
 const loader = new GLTFLoader();
 loader.load('./mops.glb',
@@ -430,15 +528,55 @@ canvas.addEventListener('pointerup', (e) => {
   const near = Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 8;
   if (near && (now - lastClickT) < 350){
     const p = pickPart(e);
-    if (p) toggle(p);
+    if (p){
+      toggle(p);
+      spawnRipple(e.clientX, e.clientY);   // «рябь» при скрытии/показе
+    }
     lastClickT = 0; lastClickX = -9999; lastClickY = -9999;
   } else {
     lastClickT = now; lastClickX = e.clientX; lastClickY = e.clientY;
   }
 });
+
+/* ---------- Круглый курсор ---------- */
+const ring = document.getElementById('cursor-ring');
+let lastPick = null;
+function moveRing(e){
+  ring.style.left = e.clientX + 'px';
+  ring.style.top  = e.clientY + 'px';
+}
 canvas.addEventListener('pointermove', (e) => {
-  canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
+  const p = pickPart(e);
+  moveRing(e);
+  ring.classList.toggle('over', !!p);
+  lastPick = p;
 });
+// обновлять курсор и при движении над панелью (прячем кружок)
+document.addEventListener('pointermove', (e) => {
+  moveRing(e);
+  const overCanvas = e.target === canvas;
+  ring.style.opacity = overCanvas ? '1' : '0';
+});
+canvas.addEventListener('pointerenter', () => { ring.style.opacity = '1'; });
+canvas.addEventListener('pointerleave', () => { ring.style.opacity = '0'; });
+
+/* ---------- Рябь (как капля в воде) ---------- */
+const rippleLayer = document.getElementById('ripple-layer');
+function spawnRipple(x, y){
+  // несколько концентрических волн с лёгкой задержкой
+  const sizes = [70, 110];
+  sizes.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'ripple';
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.style.width = s + 'px';
+    el.style.height = s + 'px';
+    el.style.animationDelay = (i * 0.12) + 's';
+    rippleLayer.appendChild(el);
+    setTimeout(() => el.remove(), 900 + i * 120);
+  });
+}
 
 /* ---------- Кубик видов ---------- */
 const cubeEl = document.getElementById('cube');
@@ -488,5 +626,5 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a35f0abf1b9ae4e1',t:'MTc4ODU0NjM4MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
