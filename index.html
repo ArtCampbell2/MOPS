@@ -20,6 +20,18 @@
   .btn{flex:1;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:7px 8px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;user-select:none;}
   .btn:hover{background:#26303a;border-color:#3a4b5c;}
   .btn.primary{border-color:var(--accent2);}
+  .btn:disabled,.btn.disabled{opacity:.4;cursor:not-allowed;background:#1a2027;border-color:var(--border);color:var(--muted);}
+  .btn:disabled:hover,.btn.disabled:hover{background:#1a2027;border-color:var(--border);}
+  .actions-row{display:flex;gap:8px;}
+  .actions-row+.actions-row{margin-top:8px;}
+
+  /* ---------- Undo / Redo ---------- */
+  .hist-btn{display:flex;align-items:center;justify-content:center;gap:6px;}
+  .hist-btn .arrow{font-size:15px;line-height:1;}
+  .hist-btn .kbd{font-size:10px;color:var(--muted);opacity:.7;margin-left:2px;}
+  #btn-undo{border-color:#3a4b5c;}
+  #btn-redo{border-color:#3a4b5c;}
+  .hotkey-note{font-size:10px;color:var(--muted);opacity:.6;text-align:center;margin-top:5px;}
 
   .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
   .list::-webkit-scrollbar{width:9px;}
@@ -83,9 +95,19 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" id="btn-all">Показать всё</button>
-      <button class="btn" id="btn-none">Скрыть всё</button>
-      <button class="btn primary" id="btn-reset" title="Сбросить камеру">⟲</button>
+      <div class="actions-row">
+        <button class="btn" id="btn-all">Показать всё</button>
+        <button class="btn" id="btn-none">Скрыть всё</button>
+        <button class="btn primary" id="btn-reset" title="Сбросить камеру">⟲</button>
+      </div>
+      <div class="actions-row">
+        <button class="btn hist-btn" id="btn-undo" title="Отменить (Ctrl+Z)" disabled>
+          <span class="arrow">↶</span> Отмена <span class="kbd">Ctrl+Z</span>
+        </button>
+        <button class="btn hist-btn" id="btn-redo" title="Повторить (Ctrl+Y)" disabled>
+          <span class="arrow">↷</span> Вернуть <span class="kbd">Ctrl+Y</span>
+        </button>
+      </div>
     </div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
@@ -204,13 +226,73 @@ function buildList(){
 }
 
 function toggle(p){
+  const prev = snapshot();
   p.object.visible = !p.object.visible;
   if (p.el){
     p.el.classList.toggle('on', p.object.visible);
     p.el.classList.toggle('off', !p.object.visible);
   }
   updateCount();
+  pushHistory(prev);
 }
+
+/* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
+const undoStack = [];
+const redoStack = [];
+const btnUndo = document.getElementById('btn-undo');
+const btnRedo = document.getElementById('btn-redo');
+
+function snapshot(){ return parts.map(p => p.object.visible); }
+
+function applyState(state){
+  parts.forEach((p, i) => {
+    p.object.visible = state[i];
+    if (p.el){
+      p.el.classList.toggle('on', p.object.visible);
+      p.el.classList.toggle('off', !p.object.visible);
+    }
+  });
+  updateCount();
+}
+
+function pushHistory(prev){
+  undoStack.push(prev);
+  redoStack.length = 0;
+  updateButtons();
+}
+
+function undo(){
+  if (!undoStack.length) return;
+  redoStack.push(snapshot());
+  applyState(undoStack.pop());
+  updateButtons();
+}
+
+function redo(){
+  if (!redoStack.length) return;
+  undoStack.push(snapshot());
+  applyState(redoStack.pop());
+  updateButtons();
+}
+
+function updateButtons(){
+  const u = undoStack.length > 0, r = redoStack.length > 0;
+  btnUndo.disabled = !u; btnUndo.classList.toggle('disabled', !u);
+  btnRedo.disabled = !r; btnRedo.classList.toggle('disabled', !r);
+}
+
+btnUndo.addEventListener('click', undo);
+btnRedo.addEventListener('click', redo);
+
+// Горячие клавиши
+window.addEventListener('keydown', (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')){
+    e.preventDefault(); undo();
+  } else if (mod && (e.key === 'y' || e.key === 'Y' || e.key === 'н' || e.key === 'Н')){
+    e.preventDefault(); redo();
+  }
+});
 
 /* ---------- Сбор частей ---------- */
 function unwrapRoot(root){
@@ -309,8 +391,8 @@ loader.load('./mops.glb',
 );
 
 /* ---------- Кнопки ---------- */
-document.getElementById('btn-all').onclick  = () => { parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); };
-document.getElementById('btn-none').onclick = () => { parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); };
+document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); };
+document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); };
 document.getElementById('btn-reset').onclick = () => fitCamera();
 
 /* ---------- Двойной клик по детали ---------- */
@@ -406,5 +488,5 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a35f0abf1b9ae4e1',t:'MTc4ODU0NjM4MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
