@@ -2,77 +2,21 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>3D Презентация</title>
+    <title>Тест 3D модели</title>
     <style>
-        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
-        
-        /* Растягиваем плеер от Google на весь экран */
+        /* Растягиваем страницу и плеер на весь экран, фон темно-серый */
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; }
         model-viewer { width: 100%; height: 100%; display: block; outline: none; }
-        
-        /* Панель управления элементами */
-        #ui-panel {
-            position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.85);
-            padding: 15px; border-radius: 8px; color: #fff; max-height: 80vh; overflow-y: auto;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 10; width: 220px;
-        }
-        h3 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 8px; font-size: 16px; letter-spacing: 0.5px; }
-        .toggle-btn { 
-            display: block; width: 100%; margin: 6px 0; padding: 8px 10px; background: #2a2a2a; 
-            border: 1px solid #444; color: white; border-radius: 4px; cursor: pointer; 
-            text-align: left; font-size: 13px; transition: background 0.2s;
-        }
-        .toggle-btn:hover { background: #3a3a3a; }
-        .toggle-btn.hidden { background: #5c1d1d; text-decoration: line-through; color: #999; border-color: #7a2222; }
     </style>
     
-    <!-- Подключаем официальный скрипт <model-viewer> от Google -->
+    <!-- Подключаем скрипт плеера от Google -->
     <script type="module" src="https://googleapis.com"></script>
 </head>
 <body>
 
-    <div id="ui-panel">
-        <h3>Элементы модели</h3>
-        <div id="buttons-list"></div>
-    </div>
-
-    <!-- Сам 3D-плеер: путь изменен на ./mps.glb -->
-    <model-viewer id="viewer" src="./mps.glb" camera-controls shadow-intensity="1" environment-image="neutral" exposure="1">
+    <!-- Загружаем модель mops.glb напрямую из вашего репозитория -->
+    <model-viewer src="./mops.glb" camera-controls shadow-intensity="1" environment-image="neutral" exposure="1">
     </model-viewer>
 
-    <script>
-        const modelViewer = document.getElementById("viewer");
-
-        // Ждем, пока Google плеер полностью загрузит вашу модель в память
-        modelViewer.addEventListener("load", () => {
-            const buttonsList = document.getElementById('buttons-list');
-            
-            // Получаем доступ к внутренней структуре (Scene Graph) модели
-            const sceneSymbols = modelViewer.scene.getSymbols();
-
-            sceneSymbols.forEach((symbol) => {
-                // Ищем только реальные 3D-объекты (меши), у которых есть имя
-                if (symbol.name && symbol.type === 'Mesh') {
-                    
-                    const btn = document.createElement('button');
-                    btn.className = 'toggle-btn';
-                    btn.innerText = '👁 ' + symbol.name;
-                    
-                    // Логика скрытия элемента по клику
-                    let isVisible = true;
-                    btn.onclick = () => {
-                        isVisible = !isVisible;
-                        
-                        // Переключаем видимость объекта во встроенном движке
-                        symbol.object.visible = isVisible;
-                        
-                        // Меняем стиль кнопки (зачеркиваем, если скрыт)
-                        btn.classList.toggle('hidden');
-                    };
-                    
-                    buttonsList.appendChild(btn);
-                }
-            });
-        });
-    </script>
 </body>
 </html>
