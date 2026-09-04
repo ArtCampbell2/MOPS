@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Презентация</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #ui-panel {
+            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8);
+            padding: 15px; border-radius: 8px; color: #fff; max-height: 80vh; overflow-y: auto;
+        }
+        .toggle-btn { display: block; margin: 8px 0; padding: 6px 12px; background: #333; 
+                      border: 1px solid #555; color: white; border-radius: 4px; cursor: pointer; text-align: left;}
+        .toggle-btn.hidden { background: #8b0000; text-decoration: line-through; color: #aaa; }
+    </style>
+    <!-- Подключаем Three.js и загрузчик GLTF -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h3>Элементы модели</h3>
+        <div id="buttons-list"></div>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 2, 5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Свет
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Загрузка вашей модели прямо из корня репозитория
+        const loader = new THREE.GLTFLoader();
+        loader.load('untitled.glb', function(gltf) {
+            const model = gltf.scene;
+            scene.add(model);
+
+            // Центрируем камеру по размеру модели
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            controls.target.copy(center);
+
+            // Ищем все главные меши и создаем для них кнопки переключения
+            const buttonsList = document.getElementById('buttons-list');
+            model.traverse(function(object) {
+                if (object.isMesh && object.name) {
+                    const btn = document.createElement('button');
+                    btn.className = 'toggle-btn';
+                    btn.innerText = '👁 ' + object.name;
+                    btn.onclick = function() {
+                        object.visible = !object.visible;
+                        btn.classList.toggle('hidden');
+                    };
+                    buttonsList.appendChild(btn);
+                }
+            });
+
+        }, undefined, function(error) { console.error(error); });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
