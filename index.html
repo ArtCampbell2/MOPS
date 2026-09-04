@@ -2,16 +2,16 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>3D Презентация (Babylon.js)</title>
+    <title>3D Презентация</title>
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
-        #renderCanvas { width: 100%; height: 100%; touch-action: none; }
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; }
         #ui-panel {
             position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.85);
             padding: 15px; border-radius: 8px; color: #fff; max-height: 80vh; overflow-y: auto;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5); z-index: 10; width: 220px;
         }
-        h3 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 8px; font-size: 16px; }
+        h3 { margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 8px; font-size: 16px; letter-spacing: 0.5px; }
         .toggle-btn { 
             display: block; width: 100%; margin: 6px 0; padding: 8px 10px; background: #2a2a2a; 
             border: 1px solid #444; color: white; border-radius: 4px; cursor: pointer; 
@@ -20,7 +20,7 @@
         .toggle-btn:hover { background: #3a3a3a; }
         .toggle-btn.hidden { background: #5c1d1d; text-decoration: line-through; color: #999; border-color: #7a2222; }
     </style>
-    <!-- Подключаем Babylon.js и загрузчик GLTF -->
+    <!-- Подключаем официальное ядро Babylon.js и загрузчик GLTF моделей -->
     <script src="https://babylonjs.com"></script>
     <script src="https://babylonjs.com"></script>
 </head>
@@ -38,45 +38,41 @@
 
         const createScene = function () {
             const scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.1, 1); // Темно-серый фон
+            scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.12, 1); // Красивый темно-серый фон
 
-            // Создаем дефолтное освещение и окружение (чтобы текстуры и металл блестели как надо)
+            // Создаем автоматическое освещение среды, чтобы металл и текстуры блестели как в Blender
             const environment = scene.createDefaultEnvironment({
                 createGround: false,
                 createSkybox: false
             });
 
-            // Камера с управлением мышью/пальцем
-            const camera = new BABYLON.ArcRotateCamera("camera", THREE = -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+            // Камера с вращением вокруг модели мышкой или пальцем
+            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, true);
-            camera.wheelDeltaPercentage = 0.01; // Плавный зум
+            camera.wheelDeltaPercentage = 0.01; // Плавное приближение
 
-            // Дополнительный мягкий свет, чтобы не было черных теней
+            // Дополнительный мягкий свет со всех сторон, чтобы убрать черные провалы в тенях
             const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.7;
+            light.intensity = 0.8;
 
-            // Загружаем вашу модельuntitled.glb напрямую из репозитория
+            // Загружаем ваш файл untitled.glb из корня репозитория
             BABYLON.SceneLoader.Append("", "untitled.glb", scene, function (scene) {
                 
-                // Автоматически настраиваем камеру под габариты вашей модели
                 scene.executeWhenReady(function () {
-                    camera.useAutoRotationBehavior = false;
-                    
-                    // Собираем корневые меши для создания кнопок управления
                     const buttonsList = document.getElementById('buttons-list');
                     
-                    // Проходимся по всем мешам в сцене
+                    // Перебираем объекты модели и создаем кнопки только для реальных деталей
                     scene.meshes.forEach(function(mesh) {
-                        // Игнорируем системные меши Вавилона и берем только объекты модели с именами
+                        // Игнорируем скрытые системные пустышки Вавилона, берем только меши с геометрией
                         if (mesh.name && !mesh.name.includes("Background") && mesh.id !== "____gltf_root____") {
-                            // Проверяем, есть ли у меша геометрия (чтобы не добавлять пустые группы-пустышки)
                             if (mesh.getTotalVertices() > 0) {
+                                
                                 const btn = document.createElement('button');
                                 btn.className = 'toggle-btn';
                                 btn.innerText = '👁 ' + mesh.name;
                                 
                                 btn.onclick = function() {
-                                    // Переключаем видимость (включая все дочерние элементы, если они есть)
+                                    // Переключаем видимость элемента
                                     mesh.setEnabled(!mesh.isEnabled());
                                     btn.classList.toggle('hidden');
                                 };
@@ -85,12 +81,12 @@
                         }
                     });
                     
-                    // Фокусируем камеру строго по центру объекта
+                    // Центрируем камеру точно по центру вашей модели
                     camera.setTarget(BABYLON.Vector3.Zero());
                 });
                 
             }, null, function (error) {
-                console.error("Ошибка загрузки модели:", error);
+                console.error("Ошибка при чтении 3D файла:", error);
             });
 
             return scene;
