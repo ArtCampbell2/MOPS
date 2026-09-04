@@ -131,13 +131,13 @@
       <h4>Окклюзия окружения (GTAO)</h4>
       <div class="ctl ao-toggle"><input type="checkbox" id="ao-enable" checked><label for="ao-enable">Включить AO</label></div>
       <div class="ctl"><label>Интенсивность</label><input type="range" id="ao-int" min="0" max="300" step="1" value="150"><span class="val" id="v-ao-int">150%</span></div>
-      <div class="ctl"><label>Радиус (расстояние)</label><input type="range" id="ao-radius" min="0.005" max="0.5" step="0.005" value="0.12"><span class="val" id="v-ao-radius">0.12</span></div>
-      <div class="ctl"><label>Масштаб (scale)</label><input type="range" id="ao-scale" min="0.01" max="2" step="0.01" value="1"><span class="val" id="v-ao-scale">1.00</span></div>
+      <div class="ctl"><label>Радиус (расстояние)</label><input type="range" id="ao-radius" min="0.005" max="0.5" step="0.005" value="0.01"><span class="val" id="v-ao-radius">0.01</span></div>
+      <div class="ctl"><label>Масштаб (scale)</label><input type="range" id="ao-scale" min="0.01" max="2" step="0.01" value="1.2"><span class="val" id="v-ao-scale">1.20</span></div>
       <div class="ctl"><label>Толщина (thickness)</label><input type="range" id="ao-thick" min="0.1" max="10" step="0.1" value="1.5"><span class="val" id="v-ao-thick">1.50</span></div>
-      <div class="ctl"><label>Степень расстояния</label><input type="range" id="ao-dexp" min="1" max="4" step="0.01" value="1.2"><span class="val" id="v-ao-dexp">1.20</span></div>
-      <div class="ctl"><label>Затухание (falloff)</label><input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.85"><span class="val" id="v-ao-falloff">0.85</span></div>
+      <div class="ctl"><label>Степень расстояния</label><input type="range" id="ao-dexp" min="1" max="4" step="0.01" value="1.35"><span class="val" id="v-ao-dexp">1.35</span></div>
+      <div class="ctl"><label>Затухание (falloff)</label><input type="range" id="ao-falloff" min="0" max="1" step="0.01" value="0.9"><span class="val" id="v-ao-falloff">0.90</span></div>
       <div class="ctl"><label>Сэмплы</label><input type="range" id="ao-samples" min="2" max="32" step="1" value="24"><span class="val" id="v-ao-samples">24</span></div>
-      <div class="ctl ao-toggle"><input type="checkbox" id="ao-ssradius"><label for="ao-ssradius">Экранный радиус</label></div>
+      <div class="ctl ao-toggle"><input type="checkbox" id="ao-ssradius" checked><label for="ao-ssradius">Экранный радиус</label></div>
       <div class="ctl ao-toggle"><input type="checkbox" id="ao-only"><label for="ao-only">Только AO</label></div>
     </div>
 
@@ -246,13 +246,13 @@ gtaoPass.output = GTAOPass.OUTPUT.Default;
 gtaoPass.blendIntensity = 1.0;
 
 gtaoPass.updateGtaoMaterial({
-  radius: 0.12,
-  distanceExponent: 1.2,
+  radius: 0.015,
+  distanceExponent: 1.35,
   thickness: 1.5,
-  scale: 1.0,
+  scale: 1.2,
   samples: 24,
-  distanceFallOff: 0.85,
-  screenSpaceRadius: false
+  distanceFallOff: 0.9,
+  screenSpaceRadius: true
 });
 
 // Минимальное сглаживание сохраняет контактные тени и мелкие углубления.
@@ -491,12 +491,16 @@ function applyAO(){
   const on = aoEnable.checked;
   gtaoPass.enabled = on;
   const D = modelMaxDim || 1;
-  // Радиус задаётся как доля реального габарита модели.
-  // Это делает AO одинаково управляемым для маленьких и больших GLB.
-  const aoWorldRadius = Math.max(0.0005, parseFloat(aoRadius.value) * D);
+  // Для архитектуры большой радиус по габариту здания превращает AO
+  // в «тень от куба». Используем нелинейное преобразование: ползунок
+  // остаётся удобным, но рабочий радиус остаётся локальным относительно
+  // каркаса/стыка панелей. При включённом screenSpaceRadius three.js
+  // дополнительно стабилизирует размер эффекта относительно экрана.
+  const sliderRadius = parseFloat(aoRadius.value);
+  const localRadius = Math.max(0.00005, Math.pow(sliderRadius, 1.65) * D * 0.22);
 
   gtaoPass.updateGtaoMaterial({
-    radius:            aoWorldRadius,
+    radius:            localRadius,
     distanceExponent:  parseFloat(aoDexp.value),
     distanceFallOff:   parseFloat(aoFalloff.value),
     thickness:         parseFloat(aoThick.value),
