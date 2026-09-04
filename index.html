@@ -5,7 +5,11 @@
     <title>3D Презентация</title>
     <style>
         html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #1a1a1a; }
-        #renderCanvas { width: 100%; height: 100%; touch-action: none; outline: none; }
+        
+        /* Растягиваем плеер от Google на весь экран */
+        model-viewer { width: 100%; height: 100%; display: block; outline: none; }
+        
+        /* Панель управления элементами */
         #ui-panel {
             position: absolute; top: 20px; left: 20px; background: rgba(0, 0, 0, 0.85);
             padding: 15px; border-radius: 8px; color: #fff; max-height: 80vh; overflow-y: auto;
@@ -20,9 +24,9 @@
         .toggle-btn:hover { background: #3a3a3a; }
         .toggle-btn.hidden { background: #5c1d1d; text-decoration: line-through; color: #999; border-color: #7a2222; }
     </style>
-    <!-- Подключаем официальное ядро Babylon.js и загрузчик GLTF моделей -->
-    <script src="https://babylonjs.com"></script>
-    <script src="https://babylonjs.com"></script>
+    
+    <!-- Подключаем официальный скрипт <model-viewer> от Google -->
+    <script type="module" src="https://googleapis.com"></script>
 </head>
 <body>
 
@@ -30,78 +34,44 @@
         <h3>Элементы модели</h3>
         <div id="buttons-list"></div>
     </div>
-    <canvas id="renderCanvas"></canvas>
+
+    <!-- Сам 3D-плеер: путь изменен на ./mps.glb -->
+    <model-viewer id="viewer" src="./mps.glb" camera-controls shadow-intensity="1" environment-image="neutral" exposure="1">
+    </model-viewer>
 
     <script>
-        const canvas = document.getElementById("renderCanvas");
-        const engine = new BABYLON.Engine(canvas, true);
+        const modelViewer = document.getElementById("viewer");
 
-        const createScene = function () {
-            const scene = new BABYLON.Scene(engine);
-            scene.clearColor = new BABYLON.Color4(0.12, 0.12, 0.12, 1); // Темно-серый фон
+        // Ждем, пока Google плеер полностью загрузит вашу модель в память
+        modelViewer.addEventListener("load", () => {
+            const buttonsList = document.getElementById('buttons-list');
+            
+            // Получаем доступ к внутренней структуре (Scene Graph) модели
+            const sceneSymbols = modelViewer.scene.getSymbols();
 
-            // Автоматическое освещение среды для правильного блеска материалов
-            const environment = scene.createDefaultEnvironment({
-                createGround: false,
-                createSkybox: false
-            });
-
-            // Камера с вращением вокруг модели мышкой или пальцем
-            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene);
-            camera.attachControl(canvas, true);
-            camera.wheelDeltaPercentage = 0.01; // Плавное приближение
-
-            // Дополнительный мягкий свет, чтобы убрать черные тени
-            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.8;
-
-            // Загружаем ваш файл untitled.glb из корня репозитория (добавлен правильный путь ./)
-            BABYLON.SceneLoader.Append("", "./untitled.glb", scene, function (scene) {
-                
-                scene.executeWhenReady(function () {
-                    const buttonsList = document.getElementById('buttons-list');
+            sceneSymbols.forEach((symbol) => {
+                // Ищем только реальные 3D-объекты (меши), у которых есть имя
+                if (symbol.name && symbol.type === 'Mesh') {
                     
-                    // Перебираем объекты модели и создаем кнопки только для реальных деталей
-                    scene.meshes.forEach(function(mesh) {
-                        // Игнорируем скрытые системные пустышки Вавилона, берем только меши с геометрией
-                        if (mesh.name && !mesh.name.includes("Background") && mesh.id !== "____gltf_root____") {
-                            if (mesh.getTotalVertices() > 0) {
-                                
-                                const btn = document.createElement('button');
-                                btn.className = 'toggle-btn';
-                                btn.innerText = '👁 ' + mesh.name;
-                                
-                                btn.onclick = function() {
-                                    // Переключаем видимость элемента
-                                    mesh.setEnabled(!mesh.isEnabled());
-                                    btn.classList.toggle('hidden');
-                                };
-                                buttonsList.appendChild(btn);
-                            }
-                        }
-                    });
+                    const btn = document.createElement('button');
+                    btn.className = 'toggle-btn';
+                    btn.innerText = '👁 ' + symbol.name;
                     
-                    // УМНЫЙ ФОКУС КАМЕРЫ: Вавилон сам найдет модель и наведется на нее, где бы она ни лежала
-                    if (scene.meshes.length > 0) {
-                        camera.zoomOn(scene.meshes);
-                    }
-                });
-                
-            }, null, function (error) {
-                console.error("Ошибка при чтении 3D файла:", error);
+                    // Логика скрытия элемента по клику
+                    let isVisible = true;
+                    btn.onclick = () => {
+                        isVisible = !isVisible;
+                        
+                        // Переключаем видимость объекта во встроенном движке
+                        symbol.object.visible = isVisible;
+                        
+                        // Меняем стиль кнопки (зачеркиваем, если скрыт)
+                        btn.classList.toggle('hidden');
+                    };
+                    
+                    buttonsList.appendChild(btn);
+                }
             });
-
-            return scene;
-        };
-
-        const scene = createScene();
-
-        engine.runRenderLoop(function () {
-            scene.render();
-        });
-
-        window.addEventListener("resize", function () {
-            engine.resize();
         });
     </script>
 </body>
