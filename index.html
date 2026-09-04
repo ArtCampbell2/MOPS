@@ -85,6 +85,8 @@
   .preset{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;}
   .preset button{border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:11px;padding:6px 4px;border-radius:7px;cursor:pointer;transition:background .12s;}
   .preset button:hover{background:#26303a;border-color:var(--accent);}
+  .filebtn{display:block;width:100%;text-align:center;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:8px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;font-weight:500;}
+  .filebtn:hover{background:#26303a;border-color:var(--accent);}
 
   @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
 </style>
@@ -143,6 +145,14 @@
       </div>
     </div>
 
+    <div class="light-section">
+      <h4>Окружение / HDRI</h4>
+      <div class="ctl ao-toggle"><label class="filebtn" for="hdri-file">Загрузить HDRI<input type="file" id="hdri-file" accept=".hdr,.exr" hidden></label></div>
+      <div class="ctl"><label>Яркость</label><input type="range" id="hdri-bright" min="0" max="6" step="0.01" value="1"><span class="val" id="v-hdri-bright">1.00</span></div>
+      <div class="ctl ao-toggle"><input type="checkbox" id="hdri-bg"><label for="hdri-bg">HDRI как фон</label></div>
+      <div class="ctl ao-toggle"><input type="checkbox" id="hdri-only"><label for="hdri-only">Освещение только из HDRI</label></div>
+    </div>
+
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
 
@@ -170,6 +180,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
@@ -506,6 +518,76 @@ document.querySelectorAll('.preset button').forEach(btn => {
   });
 });
 
+/* ---------- Окружение / HDRI ---------- */
+const hdriFile   = $id('hdri-file');
+const hdriBright = $id('hdri-bright');
+const hdriBg     = $id('hdri-bg');
+const hdriOnly   = $id('hdri-only');
+
+const HEMI_INT = hemiLight.intensity;            // 1.0
+const AMB_INT  = ambient.intensity;              // 0.32
+const DIR_INT  = shadowRig.map(l => l.intensity);// [1.4,0.8,0.8]
+const DEFAULT_BG = scene.background;             // тёмный фон по умолчанию
+const builtinLights = [hemiLight, ambient, ...shadowRig];
+
+let hdriLoaded = false;
+let hdriEquirect = null;                          // исходная equirect-текстура для фона
+
+function setBuiltinLighting(scale){
+  hemiLight.intensity = HEMI_INT * scale;
+  ambient.intensity   = AMB_INT  * scale;
+  shadowRig.forEach((l, i) => { l.intensity = DIR_INT[i] * scale; });
+}
+
+function applyHdriBright(){
+  const v = parseFloat(hdriBright.value);
+  scene.environmentIntensity = v;   // яркость IBL (освещения из HDRI)
+  scene.backgroundIntensity  = v;   // яркость фона, если HDRI включён как фон
+  $id('v-hdri-bright').textContent = v.toFixed(2);
+  needsRender = true;
+}
+
+function applyHdri(){
+  const on = hdriLoaded;
+  // Только из HDRI = гасим встроенные источники, чтобы свет шёл исключительно от карты.
+  const scale = (on && hdriOnly.checked) ? 0 : 1;
+  setBuiltinLighting(scale);
+  scene.background = (on && hdriBg.checked && hdriEquirect) ? hdriEquirect : DEFAULT_BG;
+  hdriBright.disabled = !on;
+  hdriBg.disabled     = !on;
+  hdriOnly.disabled   = !on;
+  applyHdriBright();
+  needsRender = true;
+}
+
+hdriFile.addEventListener('change', () => {
+  const file = hdriFile.files && hdriFile.files[0];
+  if (!file) return;
+  const isHdr = /\.hdr$/i.test(file.name);
+  const isExr = /\.exr$/i.test(file.name);
+  if (!isHdr && !isExr){ alert('Поддерживаются файлы .hdr и .exr'); return; }
+  const loader = isHdr ? new RGBELoader() : new EXRLoader();
+  loader.load(URL.createObjectURL(file), (tex) => {
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envRT = pmrem.fromEquirectangular(tex);
+    scene.environment = envRT.texture;   // IBL (освещение HDRI)
+    hdriEquirect = tex;                  // фон (equirect)
+    hdriLoaded = true;
+    hdriOnly.checked = true;             // сразу делаем HDRI единственным источником
+    pmrem.dispose();
+    applyHdri();
+  }, undefined, (err) => {
+    console.error(err);
+    alert('Не удалось загрузить HDRI. Проверьте файл.');
+  });
+});
+
+hdriBright.addEventListener('input', applyHdriBright);
+hdriBg.addEventListener('change', applyHdri);
+hdriOnly.addEventListener('change', applyHdri);
+applyHdri();
+
 /* ---------- Загрузка ---------- */
 const loader = new GLTFLoader();
 loader.load('./mops.glb',
@@ -642,5 +724,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3605a7a7e227dfc',t:'MTc4ODU2MDEzMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3607ce1a8bc7dfc',t:'MTc4ODU2MTU0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
