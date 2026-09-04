@@ -176,7 +176,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.8;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -234,7 +234,7 @@ window.__n8ao = n8ao;
 
 // N8AO сам делает гамма-коррекцию (outputColorSpace), поэтому финального
 // OutputPass не нужно. Параметры берем из панели (см. applyAO ниже).
-n8ao.configuration.aoRadius = 100;            // Расстояние, мм (мировые юниты) — «Детали»
+n8ao.configuration.aoRadius = 300;            // Расстояние, мм (мировые юниты) — «Детали»
 n8ao.configuration.distanceFalloff = 1.0;
 n8ao.configuration.aoSamples = 24;            // Точность — «Детали»
 n8ao.configuration.denoiseSamples = 8;
