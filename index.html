@@ -90,8 +90,8 @@
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>колесо</b> — масштаб · <b>ПКМ</b> — панорама<br>🖱️ <b>клик по модели</b> — включить/выключить деталь</div>
-  <div id="hover-tip"><span class="nm"></span><span class="hint-msg"> — клик, чтобы переключить</span></div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>колесо</b> — масштаб · <b>ПКМ</b> — панорама<br>🖱️ <b>двойной клик по детали</b> — скрыть / показать</div>
+  <div id="hover-tip"><span class="nm"></span></div>
 
   <div id="overlay">
     <div class="spinner"></div>
@@ -303,32 +303,70 @@ function pickPart(e){
   return obj ? partByUuid.get(obj.uuid) : null;
 }
 
-// Клик = нажали и отпустили почти без движения (раньше это было вращение)
+// Двойной клик = два клика почти в одной точке и без перетаскивания
+let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
 let downX = 0, downY = 0;
-canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+canvas.addEventListener('pointerdown', (e) => {
+  downX = e.clientX; downY = e.clientY;
+});
 canvas.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
-  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // это был поворот, не клик
-  const p = pickPart(e);
-  if (p) toggle(p);
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;   // это был поворот
+  const now = performance.now();
+  const nearPrev = Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 8;
+  if (nearPrev && (now - lastClickT) < 350){
+    // Двойной клик — переключаем деталь
+    const p = pickPart(e);
+    if (p) toggle(p);
+    lastClickT = 0; lastClickX = -9999; lastClickY = -9999;
+  } else {
+    lastClickT = now; lastClickX = e.clientX; lastClickY = e.clientY;
+  }
 });
 
-// Наведение: показываем название детали
+/* ---------- Наведение: название с небольшой задержкой ----------
+   Задержка нужна, чтобы название не маячило при быстром движении мыши. */
+const HOVER_DELAY = 200;   // мс
+let hoverTimer = null;
+let hoveredPart = null;
+
+function showTip(p, e){
+  hoverTip.querySelector('.nm').textContent = p.name;
+  const rect = canvas.getBoundingClientRect();
+  hoverTip.style.left = (e.clientX - rect.left) + 'px';
+  hoverTip.style.top  = (e.clientY - rect.top) + 'px';
+  hoverTip.style.display = 'block';
+}
+function hideTip(){
+  if (hoverTimer){ clearTimeout(hoverTimer); hoverTimer = null; }
+  hoveredPart = null;
+  hoverTip.style.display = 'none';
+}
+
 canvas.addEventListener('pointermove', (e) => {
   const p = pickPart(e);
   if (p){
-    hoverTip.querySelector('.nm').textContent = p.name;
-    hoverTip.style.display = 'block';
-    const rect = canvas.getBoundingClientRect();
-    hoverTip.style.left = (e.clientX - rect.left) + 'px';
-    hoverTip.style.top  = (e.clientY - rect.top) + 'px';
     canvas.style.cursor = 'pointer';
+    if (p !== hoveredPart){
+      // навели на новую деталь — сбрасываем таймер и ждём задержку
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoveredPart = p;
+      hoverTip.style.display = 'none';
+      hoverTimer = setTimeout(() => showTip(p, e), HOVER_DELAY);
+    } else {
+      // та же деталь — обновляем позицию, если подсказка уже видна
+      if (hoverTip.style.display === 'block'){
+        const rect = canvas.getBoundingClientRect();
+        hoverTip.style.left = (e.clientX - rect.left) + 'px';
+        hoverTip.style.top  = (e.clientY - rect.top) + 'px';
+      }
+    }
   } else {
-    hoverTip.style.display = 'none';
     canvas.style.cursor = 'grab';
+    hideTip();
   }
 });
-canvas.addEventListener('pointerleave', () => { hoverTip.style.display = 'none'; });
+canvas.addEventListener('pointerleave', () => { canvas.style.cursor = 'grab'; hideTip(); });
 
 /* ---------- Ресайз ---------- */
 window.addEventListener('resize', () => {
@@ -342,5 +380,5 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a35de7984843e4ea',t:'MTc4ODUzNDQ1NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
