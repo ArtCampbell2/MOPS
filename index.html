@@ -11,7 +11,6 @@
   #app{position:relative;height:100vh;width:100vw;}
   #canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;}
 
-  /* ---------- Панель слева ---------- */
   #panel{position:absolute;top:16px;left:16px;z-index:20;width:300px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;}
   .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
   .head .badge{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent),var(--accent2));font-weight:700;font-size:15px;color:#fff;}
@@ -21,14 +20,6 @@
   .btn{flex:1;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:7px 8px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;user-select:none;}
   .btn:hover{background:#26303a;border-color:#3a4b5c;}
   .btn.primary{border-color:var(--accent2);}
-
-  /* ---------- Ползунок «Разбор» ---------- */
-  .explode-row{padding:10px 14px;border-bottom:1px solid var(--border);}
-  .explode-row .lbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;}
-  .explode-row .lbl b{color:var(--text);}
-  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:6px;background:var(--panel2);outline:none;cursor:pointer;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4);}
-  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;cursor:pointer;}
 
   .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
   .list::-webkit-scrollbar{width:9px;}
@@ -49,8 +40,7 @@
   #hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(16,20,24,.7);border:1px solid var(--border);border-radius:30px;padding:8px 16px;font-size:12px;color:var(--muted);white-space:nowrap;backdrop-filter:blur(4px);transition:opacity .4s;pointer-events:none;}
   #hint b{color:var(--text);font-weight:600;}
 
-  /* ---------- Кубик видов (как в SolidWorks) ---------- */
-  .view-cube{position:absolute;right:16px;bottom:16px;width:96px;height:96px;z-index:25;perspective:700px;user-select:none;}
+  .view-cube{position:absolute;right:28px;bottom:70px;width:96px;height:96px;z-index:25;perspective:700px;user-select:none;}
   .cube{position:relative;width:96px;height:96px;transform-style:preserve-3d;}
   .face{position:absolute;left:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#dfe7ee;background:rgba(30,38,46,.92);border:1px solid #3a4b5c;cursor:pointer;backface-visibility:hidden;transition:background .12s;}
   .face:hover{background:rgba(63,169,245,.35);}
@@ -97,10 +87,6 @@
       <button class="btn" id="btn-none">Скрыть всё</button>
       <button class="btn primary" id="btn-reset" title="Сбросить камеру">⟲</button>
     </div>
-    <div class="explode-row">
-      <div class="lbl"><b>Разбор</b><span id="explode-val">0%</span></div>
-      <input type="range" id="explode" min="0" max="1" step="0.01" value="0">
-    </div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
@@ -136,32 +122,52 @@ const overlay = document.getElementById('overlay');
 const loadMsg = document.getElementById('load-msg');
 const loadErr = document.getElementById('load-err');
 
+/* ---------- Рендер ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+/* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101418);
+scene.background = new THREE.Color(0x14181d);
+
+// IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
+// чтобы не было «чёрной стороны» у блестящих материалов.
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
 
+/* ---------- СВЕТ: купол + ambient ----------
+   HemisphereLight = «купол» (dome light): сверху светлее, снизу — мягкая
+   подсветка. Даёт равномерное объёмное свечение со всех сторон.
+   AmbientLight добавляет базовую заливку, чтобы тени не были чёрными.
+   DirectionalLight оставлен слабым — только для мягкой тени и объёма. */
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a929b, 1.9);
+scene.add(hemi);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+scene.add(ambient);
+
+const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+dir.castShadow = true;
+scene.add(dir);
+
+// Лёгкие встречные засветки, чтобы грани не тонули (не перебивают купол)
+const fill = new THREE.DirectionalLight(0xbfd4ff, 0.35);
+fill.position.set(-3000, 1000, -4000);
+scene.add(fill);
+
+/* ---------- Камера ---------- */
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100000);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = true;
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 0.55));
-const dir = new THREE.DirectionalLight(0xffffff, 2.2);
-scene.add(dir);
-const fill = new THREE.DirectionalLight(0x88bbff, 0.5);
-fill.position.set(-3000, 1000, -4000);
-scene.add(fill);
 
 /* ---------- Состояние ---------- */
 const parts = [];
@@ -171,7 +177,6 @@ const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,
 let modelCenter = new THREE.Vector3();
 let modelMaxDim = 1;
 let cameraDist  = 1;
-let partParentInv = null;   // общая матрица (инверсия) родителя частей
 
 function updateCount(){
   const v = parts.filter(p => p.object.visible).length;
@@ -217,16 +222,24 @@ function collectParts(root){
   const container = unwrapRoot(root);
   parts.length = 0;
   container.children.forEach((child, i) => {
-    child.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+    child.traverse(o => {
+      if (o.isMesh){
+        o.castShadow = true;
+        o.receiveShadow = true;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach(m => {
+          // Усиливаем отражения окружения, чтобы блестящее не чернело
+          m.envMapIntensity = 1.2;
+        });
+      }
+    });
     parts.push({
       object: child,
       name: chooseName(child.name, i),
-      color: palette[i % palette.length],
-      origPos: child.position.clone()
+      color: palette[i % palette.length]
     });
   });
-  if (parts.length === 0) parts.push({ object: root, name: 'Модель', color: palette[0], origPos: root.position.clone() });
-  partParentInv = container.matrixWorld.clone().invert();
+  if (parts.length === 0) parts.push({ object: root, name: 'Модель', color: palette[0] });
   return container;
 }
 
@@ -254,6 +267,7 @@ function fitCamera(){
   controls.maxDistance = maxDim * 5;
   controls.update();
 
+  // Теневая камера покрывает модель
   dir.position.set(center.x + maxDim, center.y + maxDim, center.z + maxDim);
   dir.target.position.copy(center);
   scene.add(dir.target);
@@ -264,31 +278,9 @@ function fitCamera(){
   dir.shadow.camera.near = maxDim * 0.01;
   dir.shadow.camera.far  = maxDim * 4;
   dir.shadow.camera.updateProjectionMatrix();
+  dir.shadow.bias = -0.0001;
+  dir.shadow.normalBias = maxDim * 0.0003;
 }
-
-/* ---------- Разбор (взрыв) ---------- */
-function applyExplode(t){
-  if (!partParentInv || !parts.length) return;
-  const maxDist = modelMaxDim * 0.32;
-  const tmp = new THREE.Vector3();
-  parts.forEach(p => {
-    const box = new THREE.Box3().setFromObject(p.object);
-    const pc = box.getCenter(new THREE.Vector3());
-    const dir = pc.clone().sub(modelCenter);
-    if (dir.lengthSq() < 1e-6) dir.set(0, 1, 0);
-    dir.normalize();
-    dir.transformDirection(partParentInv);   // в локальное пространство родителя
-    p.object.position.copy(p.origPos).addScaledVector(dir, t * maxDist);
-  });
-}
-
-const explodeInput = document.getElementById('explode');
-explodeInput.addEventListener('input', () => {
-  const t = parseFloat(explodeInput.value);
-  document.getElementById('explode-val').textContent = Math.round(t * 100) + '%';
-  applyExplode(t);
-});
-explodeInput.addEventListener('change', () => applyExplode(parseFloat(explodeInput.value)));
 
 /* ---------- Загрузка ---------- */
 const loader = new GLTFLoader();
@@ -346,7 +338,6 @@ function pickPart(e){
   return obj ? partByUuid.get(obj.uuid) : null;
 }
 
-
 let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
 let downX = 0, downY = 0;
 canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
@@ -370,8 +361,6 @@ canvas.addEventListener('pointermove', (e) => {
 /* ---------- Кубик видов ---------- */
 const cubeEl = document.getElementById('cube');
 const tmpBasis = new THREE.Matrix4();
-const _z = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3();
-const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 function setView(n){
   const center = modelCenter.clone();
@@ -389,13 +378,19 @@ document.querySelectorAll('.face').forEach(f => {
 });
 
 function updateViewCube(){
-  _z.copy(controls.target).sub(camera.position).normalize().negate(); // направление «к камере»
-  _x.crossVectors(WORLD_UP, _z);
-  if (_x.lengthSq() < 1e-6) _x.set(1, 0, 0);
-  _x.normalize();
-  _y.crossVectors(_z, _x).normalize();
-  tmpBasis.makeBasis(_x, _y, _z);
-  cubeEl.style.transform = 'matrix3d(' + tmpBasis.elements.join(',') + ')';
+  // three.js — правая система (Y вверх); CSS 3D — правая система (Y вниз).
+  // Обратный поворот камеры + сопряжение отражения по Y (S·R·S),
+  // чтобы куб вращался синхронно с камерой и показывал нужные грани.
+  tmpBasis.makeRotationFromQuaternion(camera.quaternion);
+  tmpBasis.invert();
+  const e = tmpBasis.elements;
+  const css = [
+    e[0], -e[1], e[2], 0,
+   -e[4],  e[5], -e[6], 0,
+    e[8], -e[9], e[10], 0,
+    0,0,0,1
+  ];
+  cubeEl.style.transform = 'matrix3d(' + css.join(',') + ')';
 }
 
 /* ---------- Ресайз ---------- */
