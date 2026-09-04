@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>3D Viewer — Мопс</title>
+<title>3D Viewer</title>
 <style>
   :root{--bg:#101418;--panel:#161c22;--panel2:#1e262e;--border:#2b3540;--text:#e7edf3;--muted:#93a1ad;--accent:#3fa9f5;--accent2:#2b6cff;}
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
   #app{position:relative;height:100vh;width:100vw;}
   #canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;}
+
   #panel{position:absolute;top:16px;left:16px;z-index:20;width:280px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;}
   .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
   .head .badge{width:30px;height:30px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent),var(--accent2));font-weight:700;font-size:15px;color:#fff;}
@@ -18,29 +19,47 @@
   .actions{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
   .btn{flex:1;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:7px 8px;border-radius:8px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s;user-select:none;}
   .btn:hover{background:#26303a;border-color:#3a4b5c;}
+  .btn.primary{border-color:var(--accent2);}
+
   .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
   .list::-webkit-scrollbar{width:9px;}
   .list::-webkit-scrollbar-thumb{background:#3a4b5c;border-radius:8px;border:2px solid var(--panel);}
+
   .item{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;border:1px solid transparent;transition:background .12s,border-color .12s;}
   .item:hover{background:var(--panel2);border-color:var(--border);}
   .item .check{width:18px;height:18px;border-radius:5px;border:2px solid #5a6a78;flex:none;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s;}
   .item.on .check{background:var(--accent);border-color:var(--accent);}
   .item .check::after{content:"";width:10px;height:10px;border-radius:2px;background:#fff;transform:scale(0);transition:transform .12s;}
   .item.on .check::after{transform:scale(1);}
+  .item .dot{width:9px;height:9px;border-radius:50%;flex:none;}
   .item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .item.off .name{color:var(--muted);text-decoration:line-through;}
   .empty{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
-  .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);}
+  .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6;}
+
   #hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(16,20,24,.7);border:1px solid var(--border);border-radius:30px;padding:8px 16px;font-size:12px;color:var(--muted);white-space:nowrap;backdrop-filter:blur(4px);transition:opacity .4s;pointer-events:none;}
   #hint b{color:var(--text);font-weight:600;}
+
+  /* Подсказка-название детали при наведении */
+  #hover-tip{
+    position:absolute;z-index:30;pointer-events:none;display:none;
+    background:rgba(22,28,34,.95);border:1px solid var(--accent);border-radius:8px;
+    padding:5px 10px;font-size:12px;color:var(--text);white-space:nowrap;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);transform:translate(-50%,-140%);
+  }
+  #hover-tip .nm{font-weight:600;}
+  #hover-tip .hint-msg{color:var(--muted);font-size:11px;}
+
   #overlay{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);gap:16px;transition:opacity .5s;}
   #overlay.gone{opacity:0;pointer-events:none;}
   .spinner{width:46px;height:46px;border-radius:50%;border:4px solid #22303a;border-top-color:var(--accent);animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   #overlay .msg{font-size:14px;}
   #overlay .err{color:#e5484d;max-width:440px;text-align:center;line-height:1.5;display:none;}
+
   @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
 </style>
+
 <script type="importmap">
 {
   "imports": {
@@ -53,15 +72,34 @@
 <body>
 <div id="app">
   <canvas id="canvas"></canvas>
+
   <div id="panel">
-    <div class="head"><div class="badge">3D</div><div><h1>Мопс</h1><div class="sub" id="count-line">Загрузка…</div></div></div>
-    <div class="actions"><button class="btn" id="btn-all">Показать всё</button><button class="btn" id="btn-none">Скрыть всё</button></div>
+    <div class="head">
+      <div class="badge">3D</div>
+      <div>
+        <h1>Мопс</h1>
+        <div class="sub" id="count-line">Загрузка…</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-all">Показать всё</button>
+      <button class="btn" id="btn-none">Скрыть всё</button>
+      <button class="btn primary" id="btn-reset" title="Сбросить камеру">⟲</button>
+    </div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
-    <div class="foot"><span id="visible-count">0 / 0</span>&nbsp;видимо</div>
+    <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>колесо</b> — масштаб · <b>ПКМ</b> — панорама</div>
-  <div id="overlay"><div class="spinner"></div><div class="msg" id="load-msg">Загружаем модель…</div><div class="err" id="load-err"></div></div>
+
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>колесо</b> — масштаб · <b>ПКМ</b> — панорама<br>🖱️ <b>клик по модели</b> — включить/выключить деталь</div>
+  <div id="hover-tip"><span class="nm"></span><span class="hint-msg"> — клик, чтобы переключить</span></div>
+
+  <div id="overlay">
+    <div class="spinner"></div>
+    <div class="msg" id="load-msg">Загружаем модель…</div>
+    <div class="err" id="load-err"></div>
+  </div>
 </div>
+
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -84,57 +122,91 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x101418);
+
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
-camera.position.set(0.9, 0.7, 0.9);
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true; controls.dampingFactor = 0.08;
-controls.screenSpacePanning = true; controls.minDistance = 0.02; controls.maxDistance = 12;
+// Камера: near/far пересчитаются под модель после загрузки.
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100000);
 
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = true;
+
+// Свет.
 scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 0.55));
 const dir = new THREE.DirectionalLight(0xffffff, 2.2);
-dir.position.set(3,5,4); dir.castShadow = true; dir.shadow.mapSize.set(2048,2048); scene.add(dir);
-const fill = new THREE.DirectionalLight(0x88bbff, 0.5); fill.position.set(-3,1,-4); scene.add(fill);
+scene.add(dir);
+const fill = new THREE.DirectionalLight(0x88bbff, 0.5);
+fill.position.set(-3000, 1000, -4000);
+scene.add(fill);
 
-const parts = [];
+/* ---------- Список частей ---------- */
+const parts = [];      // { object, name, color, el }
 const listEl = document.getElementById('list');
+const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,0xa7c957];
+
 function updateCount(){
   const v = parts.filter(p => p.object.visible).length;
-  document.getElementById('count-line').textContent = `${parts.length} деталей в модели`;
+  document.getElementById('count-line').textContent = `${parts.length} деталей`;
   document.getElementById('visible-count').textContent = `${v} / ${parts.length}`;
 }
-const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,0xa7c957];
+
 function buildList(){
   listEl.innerHTML = '';
-  if (parts.length === 0){ listEl.innerHTML = '<div class="empty">Не найдено ни одной отдельной детали.</div>'; return; }
-  parts.forEach((p) => {
+  if (parts.length === 0){
+    listEl.innerHTML = '<div class="empty">Не найдено ни одной отдельной детали.</div>';
+    return;
+  }
+  parts.forEach((p, i) => {
     const el = document.createElement('div');
     el.className = 'item on';
-    el.innerHTML = `<span class="check"></span><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#${new THREE.Color(p.color).getHexString()}"></span><span class="name" title="${p.name}"></span>`;
+    el.innerHTML = `
+      <span class="check"></span>
+      <span class="dot" style="background:${new THREE.Color(p.color).getStyle()}"></span>
+      <span class="name" title="${p.name}"></span>`;
     el.querySelector('.name').textContent = p.name;
     el.addEventListener('click', () => toggle(p));
-    p.el = el; listEl.appendChild(el);
+    p.el = el;
+    listEl.appendChild(el);
   });
 }
+
 function toggle(p){
   p.object.visible = !p.object.visible;
   p.el.classList.toggle('on', p.object.visible);
   p.el.classList.toggle('off', !p.object.visible);
   updateCount();
 }
-function collectParts(root){
-  const seen = new Set();
-  root.traverse(o => {
-    if (o.isMesh && !seen.has(o.uuid)){
-      seen.add(o.uuid);
-      o.castShadow = true; o.receiveShadow = true;
-      parts.push({ object: o, name: (o.name && o.name.trim()) ? o.name.trim() : `Деталь ${parts.length+1}`, color: palette[parts.length % palette.length] });
-    }
-  });
-  if (parts.length === 0){ root.traverse(o => { if (o.isMesh) parts.push({ object: o, name: 'Модель', color: palette[0] }); }); }
+
+/* ---------- Сбор частей ----------
+   Правильно брать НЕ каждый меш, а каждую отдельную "деталь".
+   В gltf.scene.children лежат именованные части (100x100x3, Roof010,
+   Sendwich004, ...). Если обёртка в одном корневом группе — спускаемся в неё. */
+function unwrapRoot(root){
+  let node = root;
+  while (node.children.length === 1 && !node.children[0].isMesh){
+    node = node.children[0];
+  }
+  return node;
 }
+
+function collectParts(root){
+  const container = unwrapRoot(root);
+  parts.length = 0;
+  container.children.forEach((child, i) => {
+    child.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+    const name = (child.name && child.name.trim()) ? child.name.trim() : `Деталь ${i + 1}`;
+    parts.push({ object: child, name, color: palette[i % palette.length] });
+  });
+  if (parts.length === 0) parts.push({ object: root, name: 'Модель', color: palette[0] });
+}
+
+/* ---------- Подгонка камеры под модель ---------- */
+// Модель может быть гигантской (здесь ~4951 x 2914 x 6500 ед.).
+// Считаем реальный габарит и ставим камеру так, чтобы всё влезло,
+// а near/far пересчитываем, чтобы ничего не отсекалось.
 function fitCamera(){
   const box = new THREE.Box3().setFromObject(scene);
   if (box.isEmpty()) return;
@@ -142,42 +214,133 @@ function fitCamera(){
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
   if (!isFinite(maxDim) || maxDim === 0) return;
-  const fov = camera.fov * Math.PI/180;
-  const dist = maxDim / (2*Math.tan(fov/2)) * 1.6;
-  const dirV = new THREE.Vector3(0.6,0.5,0.7).normalize();
+
+  const fov = camera.fov * Math.PI / 180;
+  const dist = maxDim / (2 * Math.tan(fov / 2)) * 1.4;
+  const dirV = new THREE.Vector3(0.6, 0.45, 0.7).normalize();
+
   camera.position.copy(center).addScaledVector(dirV, dist);
-  camera.near = Math.max(0.001, dist/1000);
-  camera.far = Math.max(10, dist*100);
+  camera.near = Math.max(0.0001, dist / 1000);
+  camera.far  = Math.max(10, dist * 200);
   camera.updateProjectionMatrix();
-  controls.target.copy(center); controls.update();
+  controls.target.copy(center);
+  controls.minDistance = maxDim * 0.05;
+  controls.maxDistance = maxDim * 5;
+  controls.update();
+
+  // Тень: растягиваем рамку теневой камеры, чтобы покрыла модель
+  dir.position.set(center.x + maxDim, center.y + maxDim, center.z + maxDim);
+  dir.target.position.copy(center);
+  scene.add(dir.target);
+  const d = maxDim * 1.5;
+  dir.shadow.mapSize.set(2048, 2048);
+  dir.shadow.camera.left = -d; dir.shadow.camera.right = d;
+  dir.shadow.camera.top = d;   dir.shadow.camera.bottom = -d;
+  dir.shadow.camera.near = maxDim * 0.01;
+  dir.shadow.camera.far  = maxDim * 4;
+  dir.shadow.camera.updateProjectionMatrix();
 }
+
+/* ---------- Загрузка ---------- */
 const loader = new GLTFLoader();
 loader.load('./mops.glb',
   (gltf) => {
     const root = gltf.scene;
     scene.add(root);
-    collectParts(root); buildList(); fitCamera(); updateCount();
+    collectParts(root);
+    buildList();
+    buildPartMap();
+    fitCamera();
+    updateCount();
     overlay.classList.add('gone');
     setTimeout(() => overlay.remove(), 600);
     setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
   },
-  (xhr) => { if (xhr.total) loadMsg.textContent = `Загружаем модель… ${Math.round(xhr.loaded/xhr.total*100)}%`; },
+  (xhr) => { if (xhr.total) loadMsg.textContent = `Загружаем модель… ${Math.round(xhr.loaded / xhr.total * 100)}%`; },
   (err) => {
     console.error(err);
     overlay.querySelector('.spinner').style.display = 'none';
     loadMsg.style.display = 'none';
     loadErr.style.display = 'block';
-    loadErr.textContent = 'Не удалось загрузить модель. Если вы открыли файл напрямую (file://), браузер блокирует загрузку — опубликуйте на GitHub Pages или запустите локальный сервер.';
+    loadErr.textContent = 'Не удалось загрузить модель. Если открыли файл напрямую (file://), браузер блокирует загрузку — опубликуйте на GitHub Pages или запустите локальный сервер.';
   }
 );
-document.getElementById('btn-all').onclick = () => { parts.forEach(p => { p.object.visible = true; p.el.classList.add('on'); p.el.classList.remove('off'); }); updateCount(); };
+
+/* ---------- Кнопки ---------- */
+document.getElementById('btn-all').onclick  = () => { parts.forEach(p => { p.object.visible = true;  p.el.classList.add('on'); p.el.classList.remove('off'); }); updateCount(); };
 document.getElementById('btn-none').onclick = () => { parts.forEach(p => { p.object.visible = false; p.el.classList.remove('on'); p.el.classList.add('off'); }); updateCount(); };
+document.getElementById('btn-reset').onclick = () => fitCamera();
+
+/* ---------- Клик по модели (как в Blender): лучи, отключение ---------- */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const partByUuid = new Map();   // uuid каждого меша -> его деталь (часть)
+const hoverTip = document.getElementById('hover-tip');
+
+// Карта: любой меш (в т.ч. вложенный) ссылается на свою часть
+function buildPartMap(){
+  partByUuid.clear();
+  parts.forEach(p => p.object.traverse(o => partByUuid.set(o.uuid, p)));
+}
+
+// Наши координаты указателя -> нормализованные (-1..1)
+function setPointer(e){
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+// Какая деталь под курсором (только видимые)
+function pickPart(e){
+  setPointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const objs = parts.filter(p => p.object.visible).map(p => p.object);
+  if (!objs.length) return null;
+  const hits = raycaster.intersectObjects(objs, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj && !partByUuid.has(obj.uuid)) obj = obj.parent;
+  return obj ? partByUuid.get(obj.uuid) : null;
+}
+
+// Клик = нажали и отпустили почти без движения (раньше это было вращение)
+let downX = 0, downY = 0;
+canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // это был поворот, не клик
+  const p = pickPart(e);
+  if (p) toggle(p);
+});
+
+// Наведение: показываем название детали
+canvas.addEventListener('pointermove', (e) => {
+  const p = pickPart(e);
+  if (p){
+    hoverTip.querySelector('.nm').textContent = p.name;
+    hoverTip.style.display = 'block';
+    const rect = canvas.getBoundingClientRect();
+    hoverTip.style.left = (e.clientX - rect.left) + 'px';
+    hoverTip.style.top  = (e.clientY - rect.top) + 'px';
+    canvas.style.cursor = 'pointer';
+  } else {
+    hoverTip.style.display = 'none';
+    canvas.style.cursor = 'grab';
+  }
+});
+canvas.addEventListener('pointerleave', () => { hoverTip.style.display = 'none'; });
+
+/* ---------- Ресайз ---------- */
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
 </script>
 </body>
 </html>
