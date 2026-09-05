@@ -249,7 +249,7 @@ n8ao.configuration.gammaCorrection = true;
 n8ao.configuration.renderMode = 0;            // 0 = Combined (красота + AO)
 // Производительность: считаем AO в половинном разрешении и апскейлим с учётом
 // глубины — почти незаметно на глаз, но заметно быстрее на слабых GPU.
-n8ao.configuration.halfRes = true;
+n8ao.configuration.halfRes = false;
 n8ao.configuration.depthAwareUpsampling = true;
 composer.addPass(n8ao);
 composer.addPass(new SMAAPass(window.innerWidth, window.innerHeight));
@@ -429,7 +429,7 @@ function fitCamera(){
   shadowRig.forEach(l => {
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
-    l.shadow.mapSize.set(2048, 2048);   // легче для GPU, качество почти не меняется
+    l.shadow.mapSize.set(1024, 1024);   // легче для GPU, качество почти не меняется
     l.shadow.camera.left = -d; l.shadow.camera.right = d;
     l.shadow.camera.top = d;   l.shadow.camera.bottom = -d;
     l.shadow.camera.near = maxDim * 0.01;
