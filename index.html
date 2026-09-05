@@ -145,9 +145,11 @@
     </div>
     <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
+
+    
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<b>навести на группу/деталь</b> — подсветить</div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>навести на группу/деталь</b> — подсветить</div>
 
   <div class="view-cube">
     <div class="cube" id="cube">
@@ -347,7 +349,7 @@ function toggle(p){
     p.el.classList.toggle('on', p.object.visible);
     p.el.classList.toggle('off', !p.object.visible);
   }
-pushHistory(prev);
+  pushHistory(prev);
   needsRender = true;
 }
 
@@ -359,6 +361,18 @@ function eyeIcon(hidden){
 }
 
 /* Скрыть / показать группу целиком */
+function syncGroupButtons(){
+  document.querySelectorAll('.group').forEach(gEl => {
+    const hideBtn = gEl.querySelector('.g-hide');
+    if (!hideBtn) return;
+    const items = [...gEl.querySelectorAll('.item')];
+    const allHidden = items.length > 0 && items.every(el => el.classList.contains('off'));
+    hideBtn.innerHTML = eyeIcon(allHidden);
+    hideBtn.classList.toggle('off', allHidden);
+    hideBtn.title = allHidden ? 'Показать группу' : 'Скрыть группу';
+  });
+}
+
 function toggleGroup(groupParts, hideBtn){
   const prev = snapshot();
   const hide = groupParts.some(p => p.object.visible); // если хоть одна видна — прячем всю
@@ -375,7 +389,8 @@ function toggleGroup(groupParts, hideBtn){
     hideBtn.classList.toggle('off', hide);
     hideBtn.title = hide ? 'Показать группу' : 'Скрыть группу';
   }
-pushHistory(prev);
+  syncGroupButtons();
+  pushHistory(prev);
   needsRender = true;
 }
 
@@ -489,7 +504,8 @@ function applyState(state){
       p.el.classList.toggle('off', !p.object.visible);
     }
   });
-needsRender = true;
+  syncGroupButtons();
+  needsRender = true;
 }
 
 function pushHistory(prev){
@@ -528,22 +544,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault(); redo();
   }
 });
-
-/* ---------- Синхронизация кнопок групп ---------- */
-function syncGroupButtons(){
-  document.querySelectorAll('.group').forEach(gEl => {
-    const hideBtn = gEl.querySelector('.g-hide');
-    if (!hideBtn) return;
-
-    const groupItems = [...gEl.querySelectorAll('.item')];
-    const allHidden = groupItems.length > 0 &&
-      groupItems.every(el => el.classList.contains('off'));
-
-    hideBtn.innerHTML = eyeIcon(allHidden);
-    hideBtn.classList.toggle('off', allHidden);
-    hideBtn.title = allHidden ? 'Показать группу' : 'Скрыть группу';
-  });
-}
 
 /* ---------- Сбор частей ---------- */
 function unwrapRoot(root){
@@ -718,7 +718,7 @@ loader.load('./mops.glb',
     buildPartMap();
     syncGroupButtons();
     fitCamera();
-applyAO();
+      applyAO();
     overlay.classList.add('gone');
     setTimeout(() => overlay.remove(), 600);
     setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
@@ -759,6 +759,51 @@ const listChevron = $id('list-chevron');
 listToggle.addEventListener('click', () => {
   const collapsed = listEl.classList.toggle('collapsed');
   listChevron.textContent = collapsed ? '▼' : '▲';
+});
+
+/* ---------- Двойной клик по детали ---------- */
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const partByUuid = new Map();
+function buildPartMap(){
+  partByUuid.clear();
+  parts.forEach(p => p.object.traverse(o => { if (o.isMesh) partByUuid.set(o.uuid, p); }));
+}
+function setPointer(e){
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+function pickPart(e){
+  setPointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const objs = parts.filter(p => p.object.visible).map(p => p.object);
+  if (!objs.length) return null;
+  const hits = raycaster.intersectObjects(objs, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj && !partByUuid.has(obj.uuid)) obj = obj.parent;
+  return obj ? partByUuid.get(obj.uuid) : null;
+}
+
+let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
+let downX = 0, downY = 0;
+canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+canvas.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
+  const now = performance.now();
+  const near = Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 8;
+  if (near && (now - lastClickT) < 350){
+    const p = pickPart(e);
+    if (p) toggle(p);
+    lastClickT = 0; lastClickX = -9999; lastClickY = -9999;
+  } else {
+    lastClickT = now; lastClickX = e.clientX; lastClickY = e.clientY;
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
 });
 
 /* ---------- Кубик видов ---------- */
@@ -821,3 +866,4 @@ renderer.setAnimationLoop(() => {
 </script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
+
