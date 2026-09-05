@@ -26,14 +26,12 @@
   .actions-row{display:flex;gap:8px;}
   .actions-row+.actions-row{margin-top:8px;}
 
-  /* ---------- Сворачиваемый список деталей ---------- */
   .list-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;transition:background .12s;}
   .list-toggle:hover{background:var(--panel2);}
   .list-toggle .chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:10px;line-height:1;transition:transform .18s,background .12s;}
   .list-toggle:hover .chevron{background:#26303a;border-color:var(--accent);}
   #list.collapsed{display:none;}
 
-  /* ---------- Undo / Redo ---------- */
   .hist-btn{display:flex;align-items:center;justify-content:center;}
   .hist-btn .hist-label{display:block;line-height:1.2;overflow:hidden;}
   .hist-btn .arrow{font-size:15px;line-height:1;}
@@ -55,7 +53,6 @@
   .item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .item.off .name{color:var(--muted);text-decoration:line-through;}
 
-  /* ---------- Дерево групп ---------- */
   .group{margin-bottom:4px;}
   .group-head{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;background:var(--panel2);border:1px solid var(--border);transition:background .12s,border-color .12s;}
   .group-head:hover{background:#26303a;border-color:#3a4b5c;}
@@ -95,7 +92,6 @@
   #overlay .msg{font-size:14px;}
   #overlay .err{color:#e5484d;max-width:440px;text-align:center;line-height:1.5;display:none;}
 
-  /* ---------- Освещение: настройки ---------- */
   .light-section{padding:10px 14px;border-top:1px solid var(--border);}
   .light-section h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
   .ctl{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;color:var(--muted);}
@@ -185,7 +181,7 @@ const loadErr = document.getElementById('load-err');
 
 /* ---------- Рендер ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));   // производительность
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -195,41 +191,33 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 /* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffffff);   // белый фон
+scene.background = new THREE.Color(0xffffff);
 
-// IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
-// чтобы не было «чёрной стороны» у блестящих материалов.
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-scene.environmentIntensity = 0.5;   // мягкое окружение, без яркого «солнечного» блика
+scene.environmentIntensity = 0.5;
 pmrem.dispose();
 
-/* Нейтральное стандартное освещение (фиксированное, без регуляторов):
-   мягкий купол + базовая заливка + направленные источники для тени.
-   Несколько направленных «прожекторов» вокруг модели дают контактную
-   тень от КАЖДОЙ детали на соседние (объектное затенение в стыках). */
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8a929b, 1.0);
 scene.add(hemiLight);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.32);
 scene.add(ambient);
 
-// Направленные источники для контактного затенения между 48 деталями.
-// Настраиваются (позиция/границы тени) в fitCamera под размер модели.
 const shadowRig = [];
 function addShadowLight(dirVec, intensity){
   const l = new THREE.DirectionalLight(0xffffff, intensity);
   l.castShadow = true;
-  l.userData.baseDir = dirVec.clone().normalize(); // исходное (неповёрнутое) направление
+  l.userData.baseDir = dirVec.clone().normalize();
   l.userData.dir = l.userData.baseDir.clone();
   scene.add(l);
   scene.add(l.target);
   shadowRig.push(l);
   return l;
 }
-addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55);  // свет сбоку-спереди
-addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);  // слева
-addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);  // сзади-справа
+addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55);
+addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);
+addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);
 
 /* ---------- Камера ---------- */
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100000);
@@ -238,35 +226,27 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = true;
 
-/* ---------- Постобработка: N8AO (SSAO) ----------
-   N8AOPass сам рендерит сцену и накладывает AO (заменяет RenderPass). Это
-   высококачественный SSAO с «мировым» радиусом (aoRadius в юнитах = мм модели),
-   поэтому затенение стабильно на любой дистанции и читается на тонких деталях.
-   SMAA после — т.к. аппаратный MSAA не дружит с AO. */
+/* ---------- Постобработка: N8AO (SSAO) ---------- */
 const composer = new EffectComposer(renderer);
 const n8ao = new N8AOPass(scene, camera, window.innerWidth, window.innerHeight);
 window.__n8ao = n8ao;
 
-// N8AO сам делает гамма-коррекцию (outputColorSpace), поэтому финального
-// OutputPass не нужно. Параметры берем из панели (см. applyAO ниже).
-n8ao.configuration.aoRadius = 300;            // Расстояние, мм (мировые юниты) — «Детали»
+n8ao.configuration.aoRadius = 300;
 n8ao.configuration.distanceFalloff = 1.0;
-n8ao.configuration.aoSamples = 24;            // Точность — «Детали»
+n8ao.configuration.aoSamples = 24;
 n8ao.configuration.denoiseSamples = 8;
 n8ao.configuration.denoiseRadius = 12;
 n8ao.configuration.denoiseIterations = 2;
-n8ao.configuration.intensity = 5.0;          // Фактор (контраст затемнения) — «Детали»
-n8ao.configuration.screenSpaceRadius = false; // мировой радиус
+n8ao.configuration.intensity = 5.0;
+n8ao.configuration.screenSpaceRadius = false;
 n8ao.configuration.gammaCorrection = true;
-n8ao.configuration.renderMode = 0;            // 0 = Combined (красота + AO)
-// Производительность: считаем AO в половинном разрешении и апскейлим с учётом
-// глубины — почти незаметно на глаз, но заметно быстрее на слабых GPU.
+n8ao.configuration.renderMode = 0;
 n8ao.configuration.halfRes = false;
 n8ao.configuration.depthAwareUpsampling = true;
 composer.addPass(n8ao);
 composer.addPass(new SMAAPass(window.innerWidth, window.innerHeight));
 
-let needsRender = true; // отложенный рендер: пересчитываем кадр только при реальном изменении
+let needsRender = true;
 
 /* ---------- Состояние ---------- */
 const parts = [];
@@ -276,9 +256,9 @@ const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,
 let modelCenter = new THREE.Vector3();
 let modelMaxDim = 1;
 let cameraDist  = 1;
-let modelRoot   = null;   // корень модели (для габаритов без учёта пола)
-let groundPlane = null;   // пол с контактной тенью
-let modelBox    = null;   // габариты модели для AO-клипа (scene clip box)
+let modelRoot   = null;
+let groundPlane = null;
+let modelBox    = null;
 
 function updateCount(){
   const v = parts.filter(p => p.object.visible).length;
@@ -295,7 +275,6 @@ function buildList(){
   listEl.innerHTML = '';
   if (parts.length === 0){ listEl.innerHTML = '<div class="empty">Не найдено ни одной отдельной детали.</div>'; return; }
 
-  // Группируем детали, сохраняя порядок GROUPS (остальные — в конец).
   const byGroup = new Map();
   parts.forEach(p => {
     if (!byGroup.has(p.group)) byGroup.set(p.group, []);
@@ -309,9 +288,8 @@ function buildList(){
   ordered.forEach(gname => {
     const glist = byGroup.get(gname);
 
-    // Шапка группы (сворачиваемый заголовок)
     const gEl = document.createElement('div');
-    gEl.className = 'group collapsed';   // группы свёрнуты по умолчанию
+    gEl.className = 'group collapsed';
     const gHead = document.createElement('div');
     gHead.className = 'group-head';
     gHead.innerHTML = `<span class="g-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span><span class="g-name"></span><span class="g-count"></span><button class="g-hide" title="Показать/скрыть группу"></button>`;
@@ -322,7 +300,6 @@ function buildList(){
     hideBtn.addEventListener('click', (ev) => { ev.stopPropagation(); toggleGroup(glist, hideBtn); });
     gEl.appendChild(gHead);
 
-    // Детали внутри группы
     const gBody = document.createElement('div');
     gBody.className = 'group-body';
     glist.forEach(p => {
@@ -331,7 +308,6 @@ function buildList(){
       el.innerHTML = `<span class="check"></span><span class="dot" style="background:${new THREE.Color(p.color).getStyle()}"></span><span class="name"></span>`;
       el.querySelector('.name').textContent = p.name;
       el.addEventListener('click', (ev) => { ev.stopPropagation(); toggle(p); });
-      // Наведение на строку детали — подсвечиваем отдельную деталь в сцене
       el.addEventListener('mouseenter', () => setPartHighlight(p, true));
       el.addEventListener('mouseleave', () => setPartHighlight(p, false));
       p.el = el;
@@ -340,7 +316,6 @@ function buildList(){
     gEl.appendChild(gBody);
 
     gHead.addEventListener('click', () => gEl.classList.toggle('collapsed'));
-    // Наведение на группу — подсвечиваем её детали в сцене (дёшево по GPU)
     gHead.addEventListener('mouseenter', () => setGroupHighlight(glist, true));
     gHead.addEventListener('mouseleave', () => setGroupHighlight(glist, false));
     listEl.appendChild(gEl);
@@ -359,17 +334,15 @@ function toggle(p){
   needsRender = true;
 }
 
-/* SVG-иконки глаза (через currentColor): открытый глаз / перечёркнутый глаз */
 function eyeIcon(hidden){
   const open = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const off  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
   return hidden ? off : open;
 }
 
-/* Скрыть / показать группу целиком */
 function toggleGroup(groupParts, hideBtn){
   const prev = snapshot();
-  const hide = groupParts.some(p => p.object.visible); // если хоть одна видна — прячем всю
+  const hide = groupParts.some(p => p.object.visible);
   groupParts.forEach(p => {
     p.object.visible = !hide;
     if (p.el){
@@ -377,7 +350,6 @@ function toggleGroup(groupParts, hideBtn){
       p.el.classList.toggle('off', !p.object.visible);
     }
   });
-  // значок глаза: перечёркнутый (скрыта) / открытый (видима), цвет через currentColor
   if (hideBtn){
     hideBtn.innerHTML = eyeIcon(hide);
     hideBtn.classList.toggle('off', hide);
@@ -388,26 +360,16 @@ function toggleGroup(groupParts, hideBtn){
   needsRender = true;
 }
 
-/* ---------- Подсветка группы/детали при наведении ----------
-   Дёшево по GPU и без «глюков»: меняем только emissive-компоненту материала
-   (это юниформ-обновление, шейдер не пересобирается). N8AO считает AO по
-   глубине/нормалям, поэтому AO-картинка не меняется и ничего не мигает.
-   Material у каждой детали клонирован при загрузке, поэтому подсветка не
-   переносится на другие группы, делящие исходный материал.
-   Режим «рентген»: подсвеченные меши рисуются ПОВЕРХ остальных — отключаем
-   у них тест/запись глубины и поднимаем renderOrder, чтобы деталь была видна
-   даже когда её физически перекрывают другие детали. */
-const HILITE_COLOR = new THREE.Color(0x63b9ff);   // синее свечение в тон акцента
+const HILITE_COLOR = new THREE.Color(0x63b9ff);
 const HILITE_INTENSITY = 0.85;
-const XRAY_RENDER_ORDER = 5000;                   // выше любых обычных мешей
+const XRAY_RENDER_ORDER = 5000;
 
-const _hlSaved = new Map();      // material -> {emissive, emissiveIntensity, depthTest, depthWrite}
-const _objSaved = new Map();     // mesh -> baseRenderOrder
-let _hlActive = new Set();       // материалы, подсвеченные сейчас
-let _hlParts = null;             // подсвеченный массив деталей (группа или [одна деталь])
-let _hlId    = null;             // идентификатор подсвеченного объекта (для сравнения)
+const _hlSaved = new Map();
+const _objSaved = new Map();
+let _hlActive = new Set();
+let _hlParts = null;
+let _hlId    = null;
 
-// Собрать все уникальные меши набора деталей (группы или одной детали)
 function collectMeshes(partsArr){
   const meshes = new Set();
   partsArr.forEach(p => {
@@ -416,13 +378,12 @@ function collectMeshes(partsArr){
   return meshes;
 }
 
-// Применить / снять подсветку на наборе мешей (emissive + рентген-наложение)
 function applyHilite(meshes, on){
   meshes.forEach(o => {
     if (!o.isMesh) return;
     if (on){
       if (!_objSaved.has(o)) _objSaved.set(o, o.renderOrder);
-      o.renderOrder = XRAY_RENDER_ORDER;   // рисовать поверх всех остальных
+      o.renderOrder = XRAY_RENDER_ORDER;
     } else {
       const ro = _objSaved.get(o);
       if (ro !== undefined){ o.renderOrder = ro; _objSaved.delete(o); }
@@ -438,7 +399,7 @@ function applyHilite(meshes, on){
           m.emissive.copy(HILITE_COLOR);
           m.emissiveIntensity = HILITE_INTENSITY;
         }
-        m.depthTest = false;    // игнорировать глубину -> просвечивать сквозь другие
+        m.depthTest = false;
         m.depthWrite = false;
         _hlActive.add(m);
       } else {
@@ -456,34 +417,27 @@ function applyHilite(meshes, on){
   });
 }
 
-// Универсальная подсветка набора деталей (группа целиком ИЛИ одна деталь).
-// id используется, чтобы не «дребезжать» при повторном входе в тот же объект.
 function setHilite(partsArr, on, id){
   if (!partsArr || !partsArr.length) return;
-  // Повторный вход в тот же объект — ничего не делаем
   if (on && _hlId === id) return;
   if (!on && _hlId === null) return;
 
-  // Был подсвечен другой объект — снимаем его подсветку
   if (_hlParts && _hlId !== id) applyHilite(collectMeshes(_hlParts), false);
 
   applyHilite(collectMeshes(partsArr), on);
   _hlParts = on ? partsArr : null;
   _hlId    = on ? id : null;
-  needsRender = true;   // один пересчёт кадра при входе/выходе — этого достаточно
+  needsRender = true;
 }
 
-// Подсветка группы целиком при наведении на её шапку
 function setGroupHighlight(groupParts, on){
   setHilite(groupParts, on, groupParts);
 }
 
-// Подсветка одной детали при наведении на пункт списка
 function setPartHighlight(part, on){
   setHilite([part], on, part);
 }
 
-/* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
 const undoStack = [];
 const redoStack = [];
 const btnUndo = document.getElementById('btn-undo');
@@ -529,7 +483,6 @@ function updateButtons(){
 
 btnUndo.addEventListener('click', undo);
 
-// Горячие клавиши
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')){
@@ -539,21 +492,17 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-/* ---------- Сбор частей ---------- */
 function unwrapRoot(root){
   let node = root;
   while (node.children.length === 1 && !node.children[0].isMesh) node = node.children[0];
   return node;
 }
-/* ---------- Группы деталей (соответствие структуре Blender) ----------
-   Модель выгружается в глTF «плоско» (без узлов-коллекций), поэтому группы
-   собираются по именам деталей. Порядок GROUPS задаёт порядок отображения и
-   приоритет: первая подошедшая регулярка выигрывает. */
+
 const GROUPS = [
-  { name: 'Каркас',         match: /^Каркас|^Обрешетка|^Подшивка/i },             // Каркас×2 + Обрешетка×2 + Подшивка×2
-  { name: 'ЦСП',            match: /^ЦСП/i },                                     // ЦСП×2
-  { name: 'Сендвич',        match: /Сэндвич|Сендвич|Панель_Кровля/i },            // сендвич + панели кровли
-  { name: 'Перегородки',    match: /Стойки|СМЛ/i },                               // Стойки_СМЛ + СМЛ_Панели
+  { name: 'Каркас',         match: /^Каркас|^Обрешетка|^Подшивка/i },
+  { name: 'ЦСП',            match: /^ЦСП/i },
+  { name: 'Сендвич',        match: /Сэндвич|Сендвич|Панель_Кровля/i },
+  { name: 'Перегородки',    match: /Стойки|СМЛ/i },
   { name: 'Окна',           match: /ОК|OK/i },
   { name: 'Фасонные элементы', match: /Добор|Козырек|Откос|Отлив|Отлиы|Парапет|Планка|Угол/i },
   { name: 'Закладные',      match: /Закладная/i },
@@ -564,8 +513,6 @@ const GROUPS = [
 const FALLBACK_GROUP = 'Разное';
 
 function groupForName(name){
-  // Приоритет: `Откос_Дверь` всегда в «Прочее», даже если в имени есть «Откос»
-  // (иначе его перехватили бы «Фасонные элементы» со своим правилом /Откос/).
   if (/(Откос[_-]?Дверь)/i.test(name)) return 'Прочее';
   for (const g of GROUPS){ if (g.match.test(name)) return g.name; }
   return FALLBACK_GROUP;
@@ -579,9 +526,6 @@ function collectParts(root){
       if (o.isMesh){
         o.castShadow = true;
         o.receiveShadow = true;
-        // Клонируем материал у каждой детали, чтобы у неё был СВОЙ экземпляр.
-        // Так подсветка группы (смена emissive) не «протекает» на другие детали,
-        // которые в исходной модели делят один и тот же материал.
         if (Array.isArray(o.material)){
           o.material = o.material.map(m => {
             const c = m.clone();
@@ -608,9 +552,7 @@ function collectParts(root){
   return container;
 }
 
-/* ---------- Подгонка камеры ---------- */
 function fitCamera(){
-  // Габариты считаем только по модели, чтобы пол не попадал в расчёт
   const box = new THREE.Box3().setFromObject(modelRoot || scene);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
@@ -626,8 +568,6 @@ function fitCamera(){
   cameraDist = dist;
   const dirV = new THREE.Vector3(0.6, 0.45, 0.7).normalize();
   camera.position.copy(center).addScaledVector(dirV, dist);
-  // Тщательно подбираем near/far под размер модели:
-  // большой разброс «сжимает» глубину и ломает screen-space AO и тени.
   camera.near = Math.max(0.001, maxDim * 0.01);
   camera.far  = Math.max(10, maxDim * 30);
   camera.updateProjectionMatrix();
@@ -641,18 +581,13 @@ function fitCamera(){
   placeLights(center, maxDim);
 }
 
-/* ---------- Размещение источников света и поворот ----------
-   Позиция каждого направленного света = центр модели + (направление, повёрнутое
-   на угол azimuth вокруг вертикальной оси Y) * радиус. Вызывается из fitCamera
-   и при движении ползунка «Поворот света». */
-const LIGHT_AZ = { value: 153 };  // фиксированный азимут света (градусы)
+const LIGHT_AZ = { value: 153 };
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function placeLights(center, maxDim){
-  const d = maxDim * 0.9;   // тень охватывает только модель, без фона
+  const d = maxDim * 0.9;
   const ang = LIGHT_AZ.value * Math.PI / 180;
   shadowRig.forEach(l => {
-    // поворот базового направления вокруг Y на угол azimuth
     l.userData.dir = l.userData.baseDir.clone().applyAxisAngle(Y_AXIS, ang);
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
@@ -667,9 +602,6 @@ function placeLights(center, maxDim){
   });
 }
 
-/* ---------- Пол с контактной тенью ----------
-   Прозрачная плоскость, которая ловит тень от модели и «ставит» её на
-   землю — главный признак фотореализма (объект больше не висит в воздухе). */
 function addGround(center, maxDim, floorY){
   if (groundPlane){ scene.remove(groundPlane); groundPlane = null; }
   const geo = new THREE.PlaneGeometry(maxDim * 6, maxDim * 6);
@@ -681,26 +613,24 @@ function addGround(center, maxDim, floorY){
   scene.add(groundPlane);
 }
 
-/* ---------- Настройки Ambient Occlusion (N8AO) ----------
-   Фиксированный пресет «Детали»: радиус 100 мм, контраст (intensity) 10,
-   точность 24 сэмпла. Ползунки не используются. */
-const $id = id => document.getElementById(id);
-
 const AO_DETAILS = { radius: 100, intensity: 10.0, samples: 24 };
 
 function applyAO(){
   if (n8ao){
-    n8ao.configuration.aoRadius   = AO_DETAILS.radius;                // мм (мировые юниты)
+    n8ao.configuration.aoRadius   = AO_DETAILS.radius;
     n8ao.configuration.aoSamples  = AO_DETAILS.samples;
-    n8ao.configuration.intensity  = AO_DETAILS.intensity;             // контраст затемнения (всегда)
-    n8ao.configuration.renderMode = 0;                                // Combined (красота + AO)
+    n8ao.configuration.intensity  = AO_DETAILS.intensity;
+    n8ao.configuration.renderMode = 0;
   }
   needsRender = true;
 }
 applyAO();
 
-/* ---------- Загрузка ---------- */
+/* ---------- ЗАГРУЗКА С ИСПРАВЛЕННЫМИ ПРОЦЕНТАМИ ---------- */
 const loader = new GLTFLoader();
+let lastPercent = 0;
+let loadStartTime = Date.now();
+
 loader.load('./mops.glb',
   (gltf) => {
     const root = gltf.scene;
@@ -717,7 +647,32 @@ loader.load('./mops.glb',
     setTimeout(() => overlay.remove(), 600);
     setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
   },
-  (xhr) => { if (xhr.total) loadMsg.textContent = `Загружаем модель… ${Math.min(100, Math.round(xhr.loaded / xhr.total * 100))}%`; },
+  (xhr) => {
+    // ИСПРАВЛЕННАЯ ЛОГИКА ПРОЦЕНТОВ - ТОЛЬКО 0-100%
+    let percent = 0;
+    
+    if (xhr.total && xhr.total > 0) {
+      // Нормальный расчет процентов
+      percent = Math.min(100, Math.round((xhr.loaded / xhr.total) * 100));
+    } else if (xhr.loaded > 0) {
+      // Если total неизвестен, показываем прогресс до 99%
+      // Используем время для плавного увеличения
+      const elapsed = (Date.now() - loadStartTime) / 1000;
+      percent = Math.min(99, Math.round(elapsed * 5)); // ~5% в секунду до 99%
+    }
+    
+    // Защита от скачков вниз и выход за пределы
+    if (percent < lastPercent) percent = lastPercent;
+    if (percent > 100) percent = 100;
+    lastPercent = percent;
+    
+    // Обновляем сообщение
+    if (percent > 0 && percent <= 100) {
+      loadMsg.textContent = `Загружаем модель… ${percent}%`;
+    } else {
+      loadMsg.textContent = 'Загружаем модель…';
+    }
+  },
   (err) => {
     console.error(err);
     overlay.querySelector('.spinner').style.display = 'none';
@@ -731,17 +686,13 @@ loader.load('./mops.glb',
 document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
 document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
 
-/* ---------- Сворачиваемый список деталей ----------
-   Стрелка вверху списка: по клику список сворачивается вверх (▲) и
-   разворачивается вниз (▼). */
-const listToggle  = $id('list-toggle');
-const listChevron = $id('list-chevron');
+const listToggle  = document.getElementById('list-toggle');
+const listChevron = document.getElementById('list-chevron');
 listToggle.addEventListener('click', () => {
   const collapsed = listEl.classList.toggle('collapsed');
   listChevron.textContent = collapsed ? '▼' : '▲';
 });
 
-/* ---------- Двойной клик по детали ---------- */
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const partByUuid = new Map();
@@ -786,7 +737,6 @@ canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
 });
 
-/* ---------- Кубик видов ---------- */
 const cubeEl = document.getElementById('cube');
 const tmpBasis = new THREE.Matrix4();
 
@@ -806,9 +756,6 @@ document.querySelectorAll('.face').forEach(f => {
 });
 
 function updateViewCube(){
-  // three.js — правая система (Y вверх); CSS 3D — правая система (Y вниз).
-  // Обратный поворот камеры + сопряжение отражения по Y (S·R·S),
-  // чтобы куб вращался синхронно с камерой и показывал нужные грани.
   tmpBasis.makeRotationFromQuaternion(camera.quaternion);
   tmpBasis.invert();
   const e = tmpBasis.elements;
@@ -821,7 +768,6 @@ function updateViewCube(){
   cubeEl.style.transform = 'matrix3d(' + css.join(',') + ')';
 }
 
-/* ---------- Ресайз ---------- */
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -830,9 +776,6 @@ window.addEventListener('resize', () => {
   needsRender = true;
 });
 
-/* ---------- Отложенный рендер ----------
-   AO при движении камеры пересчитывается каждый кадр (это быстро), но когда
-   камера неподвижна — кадр не тратится. */
 controls.addEventListener('change', () => { needsRender = true; });
 
 renderer.setAnimationLoop(() => {
@@ -844,5 +787,6 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+</body>
 </html>
