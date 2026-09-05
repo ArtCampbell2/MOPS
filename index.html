@@ -1,123 +1,128 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>3D Viewer</title>
-  <style>
-    :root{--bg:#101418;--panel:#161c22;--panel2:#1e262e;--border:#2b3540;--text:#e7edf3;--muted:#93a1ad;--accent:#3fa9f5;--accent2:#2b6cff;}
-    *{box-sizing:border-box;}
-    html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-    #app{position:relative;height:100vh;width:100vw;}
-    #canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D Viewer</title>
+<style>
+  :root{--bg:#101418;--panel:#161c22;--panel2:#1e262e;--border:#2b3540;--text:#e7edf3;--muted:#93a1ad;--accent:#3fa9f5;--accent2:#2b6cff;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #app{position:relative;height:100vh;width:100vw;}
+  #canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;}
 
-    #panel{position:absolute;top:16px;left:16px;z-index:20;width:300px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;}
-    .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
-    .head .badge{width:38px;height:38px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0b1a4a;border:none;}
-    .head .badge img{width:100%;height:100%;object-fit:cover;display:block;}
-    .head h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
-    .head .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
-    .actions{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
-    .btn{flex:1;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:6px 8px;border-radius:8px;font-size:12px;line-height:1.2;cursor:pointer;transition:background .15s,border-color .15s;user-select:none;height:48px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center;overflow:hidden;}
-    .btn:hover{background:#26303a;border-color:#3a4b5c;}
-    .btn.primary{border-color:var(--accent2);}
-    .btn:disabled,.btn.disabled{opacity:.4;cursor:not-allowed;background:#1a2027;border-color:var(--border);color:var(--muted);}
-    .btn:disabled:hover,.btn.disabled:hover{background:#1a2027;border-color:var(--border);}
-    .actions-row{display:flex;gap:8px;}
-    .actions-row+.actions-row{margin-top:8px;}
+  #panel{position:absolute;top:16px;left:16px;z-index:20;width:300px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);overflow:hidden;}
+  .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);}
+  .head .badge{width:38px;height:38px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0b1a4a;border:none;}
+  .head .badge img{width:100%;height:100%;object-fit:cover;display:block;}
+  .head h1{font-size:15px;margin:0;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+  .head .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .actions{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);}
+  .btn{flex:1;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:6px 8px;border-radius:8px;font-size:12px;line-height:1.2;cursor:pointer;transition:background .15s,border-color .15s;user-select:none;height:48px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center;overflow:hidden;}
+  .btn:hover{background:#26303a;border-color:#3a4b5c;}
+  .btn.primary{border-color:var(--accent2);}
+  .btn:disabled,.btn.disabled{opacity:.4;cursor:not-allowed;background:#1a2027;border-color:var(--border);color:var(--muted);}
+  .btn:disabled:hover,.btn.disabled:hover{background:#1a2027;border-color:var(--border);}
+  .actions-row{display:flex;gap:8px;}
+  .actions-row+.actions-row{margin-top:8px;}
 
-    .list-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;transition:background .12s;}
-    .list-toggle:hover{background:var(--panel2);}
-    .list-toggle .chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:10px;line-height:1;transition:transform .18s,background .12s;}
-    .list-toggle:hover .chevron{background:#26303a;border-color:var(--accent);}
-    #list.collapsed{display:none;}
+  /* ---------- Сворачиваемый список деталей ---------- */
+  .list-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;transition:background .12s;}
+  .list-toggle:hover{background:var(--panel2);}
+  .list-toggle .chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:10px;line-height:1;transition:transform .18s,background .12s;}
+  .list-toggle:hover .chevron{background:#26303a;border-color:var(--accent);}
+  #list.collapsed{display:none;}
 
-    .hist-btn{display:flex;align-items:center;justify-content:center;}
-    .hist-btn .hist-label{display:block;line-height:1.2;overflow:hidden;}
-    .hist-btn .arrow{font-size:15px;line-height:1;}
-    .hist-btn .kbd{font-size:10px;color:var(--muted);opacity:.7;margin-left:2px;}
-    #btn-undo{border-color:#3a4b5c;}
-    .hotkey-note{font-size:10px;color:var(--muted);opacity:.6;text-align:center;margin-top:5px;}
+  /* ---------- Undo / Redo ---------- */
+  .hist-btn{display:flex;align-items:center;justify-content:center;}
+  .hist-btn .hist-label{display:block;line-height:1.2;overflow:hidden;}
+  .hist-btn .arrow{font-size:15px;line-height:1;}
+  .hist-btn .kbd{font-size:10px;color:var(--muted);opacity:.7;margin-left:2px;}
+  #btn-undo{border-color:#3a4b5c;}
+  .hotkey-note{font-size:10px;color:var(--muted);opacity:.6;text-align:center;margin-top:5px;}
 
-    .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
-    .list::-webkit-scrollbar{width:9px;}
-    .list::-webkit-scrollbar-thumb{background:#3a4b5c;border-radius:8px;border:2px solid var(--panel);}
+  .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
+  .list::-webkit-scrollbar{width:9px;}
+  .list::-webkit-scrollbar-thumb{background:#3a4b5c;border-radius:8px;border:2px solid var(--panel);}
 
-    .item{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;border:1px solid transparent;transition:background .12s,border-color .12s;}
-    .item:hover{background:var(--panel2);border-color:var(--border);}
-    .item .check{width:18px;height:18px;border-radius:5px;border:2px solid #5a6a78;flex:none;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s;}
-    .item.on .check{background:var(--accent);border-color:var(--accent);}
-    .item .check::after{content:"";width:10px;height:10px;border-radius:2px;background:#fff;transform:scale(0);transition:transform .12s;}
-    .item.on .check::after{transform:scale(1);}
-    .item .dot{width:9px;height:9px;border-radius:50%;flex:none;}
-    .item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .item.off .name{color:var(--muted);text-decoration:line-through;}
+  .item{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;border:1px solid transparent;transition:background .12s,border-color .12s;}
+  .item:hover{background:var(--panel2);border-color:var(--border);}
+  .item .check{width:18px;height:18px;border-radius:5px;border:2px solid #5a6a78;flex:none;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s;}
+  .item.on .check{background:var(--accent);border-color:var(--accent);}
+  .item .check::after{content:"";width:10px;height:10px;border-radius:2px;background:#fff;transform:scale(0);transition:transform .12s;}
+  .item.on .check::after{transform:scale(1);}
+  .item .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  .item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .item.off .name{color:var(--muted);text-decoration:line-through;}
 
-    .group{margin-bottom:4px;}
-    .group-head{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;background:var(--panel2);border:1px solid var(--border);transition:background .12s,border-color .12s;}
-    .group-head:hover{background:#26303a;border-color:#3a4b5c;}
-    .group-head .g-chev{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;color:var(--accent);transition:transform .15s;transform:rotate(0deg);}
-    .group-head .g-chev svg{display:block;width:16px;height:16px;}
-    .group.collapsed .group-head .g-chev{transform:rotate(-90deg);}
-    .group-head .g-name{flex:1;font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-    .group-head .g-count{flex:none;font-size:11px;color:var(--muted);background:rgba(0,0,0,.25);border-radius:10px;padding:1px 7px;}
-    .g-hide{flex:none;width:26px;height:22px;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;color:var(--accent);background:var(--panel);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:background .12s,border-color .12s,color .12s;user-select:none;}
-    .g-hide:hover{background:#0d1117;border-color:var(--accent);}
-    .g-hide.off{color:var(--muted);border-color:var(--border);background:var(--panel2);}
-    .g-hide.off:hover{color:var(--text);border-color:var(--muted);}
-    .group-body{padding-left:8px;border-left:1px solid var(--border);margin-left:9px;}
-    .group.collapsed .group-body{display:none;}
+  /* ---------- Дерево групп ---------- */
+  .group{margin-bottom:4px;}
+  .group-head{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;background:var(--panel2);border:1px solid var(--border);transition:background .12s,border-color .12s;}
+  .group-head:hover{background:#26303a;border-color:#3a4b5c;}
+  .group-head .g-chev{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;color:var(--accent);transition:transform .15s;transform:rotate(0deg);}
+  .group-head .g-chev svg{display:block;width:16px;height:16px;}
+  .group.collapsed .group-head .g-chev{transform:rotate(-90deg);}
+  .group-head .g-name{flex:1;font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .group-head .g-count{flex:none;font-size:11px;color:var(--muted);background:rgba(0,0,0,.25);border-radius:10px;padding:1px 7px;}
+  .g-hide{flex:none;width:26px;height:22px;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;color:var(--accent);background:var(--panel);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:background .12s,border-color .12s,color .12s;user-select:none;}
+  .g-hide:hover{background:#0d1117;border-color:var(--accent);}
+  .g-hide.off{color:var(--muted);border-color:var(--border);background:var(--panel2);}
+  .g-hide.off:hover{color:var(--text);border-color:var(--muted);}
+  .group-body{padding-left:8px;border-left:1px solid var(--border);margin-left:9px;}
+  .group.collapsed .group-body{display:none;}
 
-    .empty{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
-    .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6;}
+  .empty{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
+  .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6;}
 
-    #hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(16,20,24,.7);border:1px solid var(--border);border-radius:30px;padding:8px 16px;font-size:12px;color:var(--muted);white-space:nowrap;backdrop-filter:blur(4px);transition:opacity .4s;pointer-events:none;}
-    #hint b{color:var(--text);font-weight:600;}
+  #hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(16,20,24,.7);border:1px solid var(--border);border-radius:30px;padding:8px 16px;font-size:12px;color:var(--muted);white-space:nowrap;backdrop-filter:blur(4px);transition:opacity .4s;pointer-events:none;}
+  #hint b{color:var(--text);font-weight:600;}
 
-    .view-cube{position:absolute;right:28px;bottom:70px;width:96px;height:96px;z-index:25;perspective:700px;user-select:none;}
-    .cube{position:relative;width:96px;height:96px;transform-style:preserve-3d;}
-    .face{position:absolute;left:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#dfe7ee;background:rgba(30,38,46,.92);border:1px solid #3a4b5c;cursor:pointer;backface-visibility:hidden;transition:background .12s;}
-    .face:hover{background:rgba(63,169,245,.35);}
-    .face.front{transform:translateZ(48px);}
-    .face.back{transform:rotateY(180deg) translateZ(48px);}
-    .face.right{transform:rotateY(90deg) translateZ(48px);}
-    .face.left{transform:rotateY(-90deg) translateZ(48px);}
-    .face.top{transform:rotateX(90deg) translateZ(48px);}
-    .face.bottom{transform:rotateX(-90deg) translateZ(48px);}
+  .view-cube{position:absolute;right:28px;bottom:70px;width:96px;height:96px;z-index:25;perspective:700px;user-select:none;}
+  .cube{position:relative;width:96px;height:96px;transform-style:preserve-3d;}
+  .face{position:absolute;left:0;top:0;width:96px;height:96px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#dfe7ee;background:rgba(30,38,46,.92);border:1px solid #3a4b5c;cursor:pointer;backface-visibility:hidden;transition:background .12s;}
+  .face:hover{background:rgba(63,169,245,.35);}
+  .face.front{transform:translateZ(48px);}
+  .face.back{transform:rotateY(180deg) translateZ(48px);}
+  .face.right{transform:rotateY(90deg) translateZ(48px);}
+  .face.left{transform:rotateY(-90deg) translateZ(48px);}
+  .face.top{transform:rotateX(90deg) translateZ(48px);}
+  .face.bottom{transform:rotateX(-90deg) translateZ(48px);}
 
-    #overlay{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);gap:16px;transition:opacity .5s;}
-    #overlay.gone{opacity:0;pointer-events:none;}
-    .spinner{width:46px;height:46px;border-radius:50%;border:4px solid #22303a;border-top-color:var(--accent);animation:spin 1s linear infinite;}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    #overlay .msg{font-size:14px;}
-    #overlay .err{color:#e5484d;max-width:440px;text-align:center;line-height:1.5;display:none;}
+  #overlay{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);gap:16px;transition:opacity .5s;}
+  #overlay.gone{opacity:0;pointer-events:none;}
+  .spinner{width:46px;height:46px;border-radius:50%;border:4px solid #22303a;border-top-color:var(--accent);animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #overlay .msg{font-size:14px;}
+  #overlay .err{color:#e5484d;max-width:440px;text-align:center;line-height:1.5;display:none;}
 
-    .light-section{padding:10px 14px;border-top:1px solid var(--border);}
-    .light-section h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
-    .ctl{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;color:var(--muted);}
-    .ctl label{flex:1;}
-    .ctl input[type=range]{flex:2;-webkit-appearance:none;appearance:none;height:5px;border-radius:5px;background:var(--panel2);outline:none;cursor:pointer;}
-    .ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
-    .ctl input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
-    .ctl .val{width:34px;text-align:right;color:var(--text);}
-    .ao-block{margin-top:4px;padding-top:8px;border-top:1px dashed var(--border);}
-    .ao-toggle label{flex:none;cursor:pointer;color:var(--text);font-weight:500;}
-    .ao-toggle input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
-    .online{color:var(--muted);font-size:11px;line-height:1.4;}
+  /* ---------- Освещение: настройки ---------- */
+  .light-section{padding:10px 14px;border-top:1px solid var(--border);}
+  .light-section h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;}
+  .ctl{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;color:var(--muted);}
+  .ctl label{flex:1;}
+  .ctl input[type=range]{flex:2;-webkit-appearance:none;appearance:none;height:5px;border-radius:5px;background:var(--panel2);outline:none;cursor:pointer;}
+  .ctl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
+  .ctl input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);border:2px solid #0b0e11;}
+  .ctl .val{width:34px;text-align:right;color:var(--text);}
+  .ao-block{margin-top:4px;padding-top:8px;border-top:1px dashed var(--border);}
+  .ao-toggle label{flex:none;cursor:pointer;color:var(--text);font-weight:500;}
+  .ao-toggle input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+  .online{color:var(--muted);font-size:11px;line-height:1.4;}
 
-    @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
-  </style>
+  @media (max-width:560px){#panel{width:min(280px,calc(100vw - 32px));}}
+</style>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.166.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.0/examples/jsm/",
-        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.166.0/examples/jsm/",
-        "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.35.0/build/index.js"
-      }
-    }
-  </script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.166.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.166.0/examples/jsm/",
+    "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.166.0/examples/jsm/",
+    "postprocessing": "https://cdn.jsdelivr.net/npm/postprocessing@6.35.0/build/index.js"
+  }
+}
+</script>
+<base target="_blank">
 </head>
 <body>
 <div id="app">
@@ -142,11 +147,10 @@
     <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
 
-    <!-- счётчик убран -->
-    <div class="foot" style="border-top: none; padding-top: 4px;"></div>
+    <div class="foot"><span id="visible-count">0 / 0</span> видимо · <span id="hidden-count">0</span> скрыто</div>
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть/показать · <b>навести на группу/деталь</b> — подсветить</div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть</div>
 
   <div class="view-cube">
     <div class="cube" id="cube">
@@ -182,7 +186,7 @@ const loadErr = document.getElementById('load-err');
 
 /* ---------- Рендер ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));   // производительность
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -192,33 +196,41 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 /* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xffffff);
+scene.background = new THREE.Color(0xffffff);   // белый фон
 
+// IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
+// чтобы не было «чёрной стороны» у блестящих материалов.
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
-scene.environmentIntensity = 0.5;
+scene.environmentIntensity = 0.5;   // мягкое окружение, без яркого «солнечного» блика
 pmrem.dispose();
 
+/* Нейтральное стандартное освещение (фиксированное, без регуляторов):
+   мягкий купол + базовая заливка + направленные источники для тени.
+   Несколько направленных «прожекторов» вокруг модели дают контактную
+   тень от КАЖДОЙ детали на соседние (объектное затенение в стыках). */
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8a929b, 1.0);
 scene.add(hemiLight);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.32);
 scene.add(ambient);
 
+// Направленные источники для контактного затенения между 48 деталями.
+// Настраиваются (позиция/границы тени) в fitCamera под размер модели.
 const shadowRig = [];
 function addShadowLight(dirVec, intensity){
   const l = new THREE.DirectionalLight(0xffffff, intensity);
   l.castShadow = true;
-  l.userData.baseDir = dirVec.clone().normalize();
+  l.userData.baseDir = dirVec.clone().normalize(); // исходное (неповёрнутое) направление
   l.userData.dir = l.userData.baseDir.clone();
   scene.add(l);
   scene.add(l.target);
   shadowRig.push(l);
   return l;
 }
-addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55);
-addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);
-addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);
+addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55);  // свет сбоку-спереди
+addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);  // слева
+addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);  // сзади-справа
 
 /* ---------- Камера ---------- */
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100000);
@@ -227,42 +239,53 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = true;
 
-/* ---------- Постобработка: N8AO ---------- */
+/* ---------- Постобработка: N8AO (SSAO) ----------
+   N8AOPass сам рендерит сцену и накладывает AO (заменяет RenderPass). Это
+   высококачественный SSAO с «мировым» радиусом (aoRadius в юнитах = мм модели),
+   поэтому затенение стабильно на любой дистанции и читается на тонких деталях.
+   SMAA после — т.к. аппаратный MSAA не дружит с AO. */
 const composer = new EffectComposer(renderer);
 const n8ao = new N8AOPass(scene, camera, window.innerWidth, window.innerHeight);
 window.__n8ao = n8ao;
 
-n8ao.configuration.aoRadius = 300;
+// N8AO сам делает гамма-коррекцию (outputColorSpace), поэтому финального
+// OutputPass не нужно. Параметры берем из панели (см. applyAO ниже).
+n8ao.configuration.aoRadius = 300;            // Расстояние, мм (мировые юниты) — «Детали»
 n8ao.configuration.distanceFalloff = 1.0;
-n8ao.configuration.aoSamples = 24;
+n8ao.configuration.aoSamples = 24;            // Точность — «Детали»
 n8ao.configuration.denoiseSamples = 8;
 n8ao.configuration.denoiseRadius = 12;
 n8ao.configuration.denoiseIterations = 2;
-n8ao.configuration.intensity = 5.0;
-n8ao.configuration.screenSpaceRadius = false;
+n8ao.configuration.intensity = 5.0;          // Фактор (контраст затемнения) — «Детали»
+n8ao.configuration.screenSpaceRadius = false; // мировой радиус
 n8ao.configuration.gammaCorrection = true;
-n8ao.configuration.renderMode = 0;
+n8ao.configuration.renderMode = 0;            // 0 = Combined (красота + AO)
+// Производительность: считаем AO в половинном разрешении и апскейлим с учётом
+// глубины — почти незаметно на глаз, но заметно быстрее на слабых GPU.
 n8ao.configuration.halfRes = false;
 n8ao.configuration.depthAwareUpsampling = true;
 composer.addPass(n8ao);
 composer.addPass(new SMAAPass(window.innerWidth, window.innerHeight));
 
-let needsRender = true;
+let needsRender = true; // отложенный рендер: пересчитываем кадр только при реальном изменении
 
 /* ---------- Состояние ---------- */
 const parts = [];
+const groupCtrls = [];   // [{parts, hideBtn}] — для синхронизации глазков групп
 const listEl = document.getElementById('list');
 const palette = [0x4aa8ff,0xff7a6b,0x5ad38f,0xffc04d,0xb98bff,0x51d1d6,0xff8fd1,0xa7c957];
 
 let modelCenter = new THREE.Vector3();
 let modelMaxDim = 1;
 let cameraDist  = 1;
-let modelRoot   = null;
-let groundPlane = null;
-let modelBox    = null;
+let modelRoot   = null;   // корень модели (для габаритов без учёта пола)
+let groundPlane = null;   // пол с контактной тенью
+let modelBox    = null;   // габариты модели для AO-клипа (scene clip box)
 
 function updateCount(){
-  // счётчик убран
+  const v = parts.filter(p => p.object.visible).length;
+  document.getElementById('visible-count').textContent = `${v} / ${parts.length}`;
+  document.getElementById('hidden-count').textContent = String(parts.length - v);
 }
 
 function chooseName(n, i){
@@ -274,6 +297,7 @@ function buildList(){
   listEl.innerHTML = '';
   if (parts.length === 0){ listEl.innerHTML = '<div class="empty">Не найдено ни одной отдельной детали.</div>'; return; }
 
+  // Группируем детали, сохраняя порядок GROUPS (остальные — в конец).
   const byGroup = new Map();
   parts.forEach(p => {
     if (!byGroup.has(p.group)) byGroup.set(p.group, []);
@@ -287,8 +311,9 @@ function buildList(){
   ordered.forEach(gname => {
     const glist = byGroup.get(gname);
 
+    // Шапка группы (сворачиваемый заголовок)
     const gEl = document.createElement('div');
-    gEl.className = 'group collapsed';
+    gEl.className = 'group collapsed';   // группы свёрнуты по умолчанию
     const gHead = document.createElement('div');
     gHead.className = 'group-head';
     gHead.innerHTML = `<span class="g-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span><span class="g-name"></span><span class="g-count"></span><button class="g-hide" title="Показать/скрыть группу"></button>`;
@@ -299,6 +324,7 @@ function buildList(){
     hideBtn.addEventListener('click', (ev) => { ev.stopPropagation(); toggleGroup(glist, hideBtn); });
     gEl.appendChild(gHead);
 
+    // Детали внутри группы
     const gBody = document.createElement('div');
     gBody.className = 'group-body';
     glist.forEach(p => {
@@ -307,6 +333,7 @@ function buildList(){
       el.innerHTML = `<span class="check"></span><span class="dot" style="background:${new THREE.Color(p.color).getStyle()}"></span><span class="name"></span>`;
       el.querySelector('.name').textContent = p.name;
       el.addEventListener('click', (ev) => { ev.stopPropagation(); toggle(p); });
+      // Наведение на строку детали — подсвечиваем отдельную деталь в сцене
       el.addEventListener('mouseenter', () => setPartHighlight(p, true));
       el.addEventListener('mouseleave', () => setPartHighlight(p, false));
       p.el = el;
@@ -315,9 +342,24 @@ function buildList(){
     gEl.appendChild(gBody);
 
     gHead.addEventListener('click', () => gEl.classList.toggle('collapsed'));
+    // Наведение на группу — подсвечиваем её детали в сцене (дёшево по GPU)
     gHead.addEventListener('mouseenter', () => setGroupHighlight(glist, true));
     gHead.addEventListener('mouseleave', () => setGroupHighlight(glist, false));
     listEl.appendChild(gEl);
+    groupCtrls.push({ parts: glist, hideBtn: hideBtn });
+  });
+
+  syncGroupBtns();
+}
+
+/* Синхронизация глазков групп с фактической видимостью деталей
+   (нужна после «Показать всё» / «Скрыть всё» / undo-redo). */
+function syncGroupBtns(){
+  groupCtrls.forEach(({ parts: gp, hideBtn }) => {
+    const hidden = !gp.some(p => p.object.visible);
+    hideBtn.innerHTML = eyeIcon(hidden);
+    hideBtn.classList.toggle('off', hidden);
+    hideBtn.title = hidden ? 'Показать группу' : 'Скрыть группу';
   });
 }
 
@@ -333,15 +375,17 @@ function toggle(p){
   needsRender = true;
 }
 
+/* SVG-иконки глаза (через currentColor): открытый глаз / перечёркнутый глаз */
 function eyeIcon(hidden){
   const open = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
   const off  = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
   return hidden ? off : open;
 }
 
+/* Скрыть / показать группу целиком */
 function toggleGroup(groupParts, hideBtn){
   const prev = snapshot();
-  const hide = groupParts.some(p => p.object.visible);
+  const hide = groupParts.some(p => p.object.visible); // если хоть одна видна — прячем всю
   groupParts.forEach(p => {
     p.object.visible = !hide;
     if (p.el){
@@ -349,6 +393,7 @@ function toggleGroup(groupParts, hideBtn){
       p.el.classList.toggle('off', !p.object.visible);
     }
   });
+  // значок глаза: перечёркнутый (скрыта) / открытый (видима), цвет через currentColor
   if (hideBtn){
     hideBtn.innerHTML = eyeIcon(hide);
     hideBtn.classList.toggle('off', hide);
@@ -359,17 +404,26 @@ function toggleGroup(groupParts, hideBtn){
   needsRender = true;
 }
 
-/* ---------- Подсветка ---------- */
-const HILITE_COLOR = new THREE.Color(0x63b9ff);
+/* ---------- Подсветка группы/детали при наведении ----------
+   Дёшево по GPU и без «глюков»: меняем только emissive-компоненту материала
+   (это юниформ-обновление, шейдер не пересобирается). N8AO считает AO по
+   глубине/нормалям, поэтому AO-картинка не меняется и ничего не мигает.
+   Material у каждой детали клонирован при загрузке, поэтому подсветка не
+   переносится на другие группы, делящие исходный материал.
+   Режим «рентген»: подсвеченные меши рисуются ПОВЕРХ остальных — отключаем
+   у них тест/запись глубины и поднимаем renderOrder, чтобы деталь была видна
+   даже когда её физически перекрывают другие детали. */
+const HILITE_COLOR = new THREE.Color(0x63b9ff);   // синее свечение в тон акцента
 const HILITE_INTENSITY = 0.85;
-const XRAY_RENDER_ORDER = 5000;
+const XRAY_RENDER_ORDER = 5000;                   // выше любых обычных мешей
 
-const _hlSaved = new Map();
-const _objSaved = new Map();
-let _hlActive = new Set();
-let _hlParts = null;
-let _hlId    = null;
+const _hlSaved = new Map();      // material -> {emissive, emissiveIntensity, depthTest, depthWrite}
+const _objSaved = new Map();     // mesh -> baseRenderOrder
+let _hlActive = new Set();       // материалы, подсвеченные сейчас
+let _hlParts = null;             // подсвеченный массив деталей (группа или [одна деталь])
+let _hlId    = null;             // идентификатор подсвеченного объекта (для сравнения)
 
+// Собрать все уникальные меши набора деталей (группы или одной детали)
 function collectMeshes(partsArr){
   const meshes = new Set();
   partsArr.forEach(p => {
@@ -378,12 +432,13 @@ function collectMeshes(partsArr){
   return meshes;
 }
 
+// Применить / снять подсветку на наборе мешей (emissive + рентген-наложение)
 function applyHilite(meshes, on){
   meshes.forEach(o => {
     if (!o.isMesh) return;
     if (on){
       if (!_objSaved.has(o)) _objSaved.set(o, o.renderOrder);
-      o.renderOrder = XRAY_RENDER_ORDER;
+      o.renderOrder = XRAY_RENDER_ORDER;   // рисовать поверх всех остальных
     } else {
       const ro = _objSaved.get(o);
       if (ro !== undefined){ o.renderOrder = ro; _objSaved.delete(o); }
@@ -399,7 +454,7 @@ function applyHilite(meshes, on){
           m.emissive.copy(HILITE_COLOR);
           m.emissiveIntensity = HILITE_INTENSITY;
         }
-        m.depthTest = false;
+        m.depthTest = false;    // игнорировать глубину -> просвечивать сквозь другие
         m.depthWrite = false;
         _hlActive.add(m);
       } else {
@@ -417,28 +472,34 @@ function applyHilite(meshes, on){
   });
 }
 
+// Универсальная подсветка набора деталей (группа целиком ИЛИ одна деталь).
+// id используется, чтобы не «дребезжать» при повторном входе в тот же объект.
 function setHilite(partsArr, on, id){
   if (!partsArr || !partsArr.length) return;
+  // Повторный вход в тот же объект — ничего не делаем
   if (on && _hlId === id) return;
   if (!on && _hlId === null) return;
 
+  // Был подсвечен другой объект — снимаем его подсветку
   if (_hlParts && _hlId !== id) applyHilite(collectMeshes(_hlParts), false);
 
   applyHilite(collectMeshes(partsArr), on);
   _hlParts = on ? partsArr : null;
   _hlId    = on ? id : null;
-  needsRender = true;
+  needsRender = true;   // один пересчёт кадра при входе/выходе — этого достаточно
 }
 
+// Подсветка группы целиком при наведении на её шапку
 function setGroupHighlight(groupParts, on){
   setHilite(groupParts, on, groupParts);
 }
 
+// Подсветка одной детали при наведении на пункт списка
 function setPartHighlight(part, on){
   setHilite([part], on, part);
 }
 
-/* ---------- История ---------- */
+/* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
 const undoStack = [];
 const redoStack = [];
 const btnUndo = document.getElementById('btn-undo');
@@ -454,6 +515,7 @@ function applyState(state){
     }
   });
   updateCount();
+  syncGroupBtns();
   needsRender = true;
 }
 
@@ -484,6 +546,7 @@ function updateButtons(){
 
 btnUndo.addEventListener('click', undo);
 
+// Горячие клавиши
 window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я')){
@@ -499,12 +562,15 @@ function unwrapRoot(root){
   while (node.children.length === 1 && !node.children[0].isMesh) node = node.children[0];
   return node;
 }
-
+/* ---------- Группы деталей (соответствие структуре Blender) ----------
+   Модель выгружается в глTF «плоско» (без узлов-коллекций), поэтому группы
+   собираются по именам деталей. Порядок GROUPS задаёт порядок отображения и
+   приоритет: первая подошедшая регулярка выигрывает. */
 const GROUPS = [
-  { name: 'Каркас',         match: /^Каркас|^Обрешетка|^Подшивка/i },
-  { name: 'ЦСП',            match: /^ЦСП/i },
-  { name: 'Сендвич',        match: /Сэндвич|Сендвич|Панель_Кровля/i },
-  { name: 'Перегородки',    match: /Стойки|СМЛ/i },
+  { name: 'Каркас',         match: /^Каркас|^Обрешетка|^Подшивка/i },             // Каркас×2 + Обрешетка×2 + Подшивка×2
+  { name: 'ЦСП',            match: /^ЦСП/i },                                     // ЦСП×2
+  { name: 'Сендвич',        match: /Сэндвич|Сендвич|Панель_Кровля/i },            // сендвич + панели кровли
+  { name: 'Перегородки',    match: /Стойки|СМЛ/i },                               // Стойки_СМЛ + СМЛ_Панели
   { name: 'Окна',           match: /ОК|OK/i },
   { name: 'Фасонные элементы', match: /Добор|Козырек|Откос|Отлив|Отлиы|Парапет|Планка|Угол/i },
   { name: 'Закладные',      match: /Закладная/i },
@@ -515,6 +581,8 @@ const GROUPS = [
 const FALLBACK_GROUP = 'Разное';
 
 function groupForName(name){
+  // Приоритет: `Откос_Дверь` всегда в «Прочее», даже если в имени есть «Откос»
+  // (иначе его перехватили бы «Фасонные элементы» со своим правилом /Откос/).
   if (/(Откос[_-]?Дверь)/i.test(name)) return 'Прочее';
   for (const g of GROUPS){ if (g.match.test(name)) return g.name; }
   return FALLBACK_GROUP;
@@ -528,6 +596,9 @@ function collectParts(root){
       if (o.isMesh){
         o.castShadow = true;
         o.receiveShadow = true;
+        // Клонируем материал у каждой детали, чтобы у неё был СВОЙ экземпляр.
+        // Так подсветка группы (смена emissive) не «протекает» на другие детали,
+        // которые в исходной модели делят один и тот же материал.
         if (Array.isArray(o.material)){
           o.material = o.material.map(m => {
             const c = m.clone();
@@ -556,6 +627,7 @@ function collectParts(root){
 
 /* ---------- Подгонка камеры ---------- */
 function fitCamera(){
+  // Габариты считаем только по модели, чтобы пол не попадал в расчёт
   const box = new THREE.Box3().setFromObject(modelRoot || scene);
   if (box.isEmpty()) return;
   const size = box.getSize(new THREE.Vector3());
@@ -571,6 +643,8 @@ function fitCamera(){
   cameraDist = dist;
   const dirV = new THREE.Vector3(0.6, 0.45, 0.7).normalize();
   camera.position.copy(center).addScaledVector(dirV, dist);
+  // Тщательно подбираем near/far под размер модели:
+  // большой разброс «сжимает» глубину и ломает screen-space AO и тени.
   camera.near = Math.max(0.001, maxDim * 0.01);
   camera.far  = Math.max(10, maxDim * 30);
   camera.updateProjectionMatrix();
@@ -584,13 +658,18 @@ function fitCamera(){
   placeLights(center, maxDim);
 }
 
-const LIGHT_AZ = { value: 153 };
+/* ---------- Размещение источников света и поворот ----------
+   Позиция каждого направленного света = центр модели + (направление, повёрнутое
+   на угол azimuth вокруг вертикальной оси Y) * радиус. Вызывается из fitCamera
+   и при движении ползунка «Поворот света». */
+const LIGHT_AZ = { value: 153 };  // фиксированный азимут света (градусы)
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 function placeLights(center, maxDim){
-  const d = maxDim * 0.9;
+  const d = maxDim * 0.9;   // тень охватывает только модель, без фона
   const ang = LIGHT_AZ.value * Math.PI / 180;
   shadowRig.forEach(l => {
+    // поворот базового направления вокруг Y на угол azimuth
     l.userData.dir = l.userData.baseDir.clone().applyAxisAngle(Y_AXIS, ang);
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
@@ -605,6 +684,9 @@ function placeLights(center, maxDim){
   });
 }
 
+/* ---------- Пол с контактной тенью ----------
+   Прозрачная плоскость, которая ловит тень от модели и «ставит» её на
+   землю — главный признак фотореализма (объект больше не висит в воздухе). */
 function addGround(center, maxDim, floorY){
   if (groundPlane){ scene.remove(groundPlane); groundPlane = null; }
   const geo = new THREE.PlaneGeometry(maxDim * 6, maxDim * 6);
@@ -616,14 +698,19 @@ function addGround(center, maxDim, floorY){
   scene.add(groundPlane);
 }
 
+/* ---------- Настройки Ambient Occlusion (N8AO) ----------
+   Фиксированный пресет «Детали»: радиус 100 мм, контраст (intensity) 10,
+   точность 24 сэмпла. Ползунки не используются. */
+const $id = id => document.getElementById(id);
+
 const AO_DETAILS = { radius: 100, intensity: 10.0, samples: 24 };
 
 function applyAO(){
   if (n8ao){
-    n8ao.configuration.aoRadius   = AO_DETAILS.radius;
+    n8ao.configuration.aoRadius   = AO_DETAILS.radius;                // мм (мировые юниты)
     n8ao.configuration.aoSamples  = AO_DETAILS.samples;
-    n8ao.configuration.intensity  = AO_DETAILS.intensity;
-    n8ao.configuration.renderMode = 0;
+    n8ao.configuration.intensity  = AO_DETAILS.intensity;             // контраст затемнения (всегда)
+    n8ao.configuration.renderMode = 0;                                // Combined (красота + AO)
   }
   needsRender = true;
 }
@@ -657,58 +744,33 @@ loader.load('./mops.glb',
   }
 );
 
-/* ---------- Кнопки "Показать всё" / "Скрыть всё" (обновляют группы) ---------- */
-document.getElementById('btn-all').onclick  = () => {
-  const prev = snapshot();
-  parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} });
-  // обновляем иконки глаз у групп
-  document.querySelectorAll('.g-hide').forEach(b => {
-    b.innerHTML = eyeIcon(false);
-    b.classList.remove('off');
-    b.title = 'Скрыть группу';
-  });
-  updateCount();
-  pushHistory(prev);
-  needsRender = true;
-};
+/* ---------- Кнопки ---------- */
+document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); syncGroupBtns(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); syncGroupBtns(); pushHistory(prev); needsRender = true; };
 
-document.getElementById('btn-none').onclick = () => {
-  const prev = snapshot();
-  parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} });
-  document.querySelectorAll('.g-hide').forEach(b => {
-    b.innerHTML = eyeIcon(true);
-    b.classList.add('off');
-    b.title = 'Показать группу';
-  });
-  updateCount();
-  pushHistory(prev);
-  needsRender = true;
-};
-
-/* ---------- Сворачиваемый список ---------- */
-const listToggle  = document.getElementById('list-toggle');
-const listChevron = document.getElementById('list-chevron');
+/* ---------- Сворачиваемый список деталей ----------
+   Стрелка вверху списка: по клику список сворачивается вверх (▲) и
+   разворачивается вниз (▼). */
+const listToggle  = $id('list-toggle');
+const listChevron = $id('list-chevron');
 listToggle.addEventListener('click', () => {
   const collapsed = listEl.classList.toggle('collapsed');
   listChevron.textContent = collapsed ? '▼' : '▲';
 });
 
-/* ---------- Двойной клик по модели (скрыть/показать) ---------- */
+/* ---------- Двойной клик по детали ---------- */
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const partByUuid = new Map();
-
 function buildPartMap(){
   partByUuid.clear();
   parts.forEach(p => p.object.traverse(o => { if (o.isMesh) partByUuid.set(o.uuid, p); }));
 }
-
 function setPointer(e){
   const rect = canvas.getBoundingClientRect();
   pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 }
-
 function pickPart(e){
   setPointer(e);
   raycaster.setFromCamera(pointer, camera);
@@ -723,7 +785,6 @@ function pickPart(e){
 
 let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
 let downX = 0, downY = 0;
-
 canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
 canvas.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
@@ -738,8 +799,6 @@ canvas.addEventListener('pointerup', (e) => {
     lastClickT = now; lastClickX = e.clientX; lastClickY = e.clientY;
   }
 });
-
-// Подсветка при наведении на модель (для обратной связи)
 canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
 });
@@ -764,6 +823,9 @@ document.querySelectorAll('.face').forEach(f => {
 });
 
 function updateViewCube(){
+  // three.js — правая система (Y вверх); CSS 3D — правая система (Y вниз).
+  // Обратный поворот камеры + сопряжение отражения по Y (S·R·S),
+  // чтобы куб вращался синхронно с камерой и показывал нужные грани.
   tmpBasis.makeRotationFromQuaternion(camera.quaternion);
   tmpBasis.invert();
   const e = tmpBasis.elements;
@@ -785,6 +847,9 @@ window.addEventListener('resize', () => {
   needsRender = true;
 });
 
+/* ---------- Отложенный рендер ----------
+   AO при движении камеры пересчитывается каждый кадр (это быстро), но когда
+   камера неподвижна — кадр не тратится. */
 controls.addEventListener('change', () => { needsRender = true; });
 
 renderer.setAnimationLoop(() => {
@@ -796,5 +861,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
