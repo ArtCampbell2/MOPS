@@ -331,12 +331,18 @@ function buildList(){
       el.innerHTML = `<span class="check"></span><span class="dot" style="background:${new THREE.Color(p.color).getStyle()}"></span><span class="name"></span>`;
       el.querySelector('.name').textContent = p.name;
       el.addEventListener('click', (ev) => { ev.stopPropagation(); toggle(p); });
+      // Подсветка + «рентген» отдельной детали при наведении в списке
+      el.addEventListener('mouseenter', () => hoverPart(p));
+      el.addEventListener('mouseleave', () => unhover());
       p.el = el;
       gBody.appendChild(el);
     });
     gEl.appendChild(gBody);
 
     gHead.addEventListener('click', () => gEl.classList.toggle('collapsed'));
+    // Подсветка + «рентген» деталей группы при наведении на заголовок
+    gHead.addEventListener('mouseenter', () => hoverGroup(gname));
+    gHead.addEventListener('mouseleave', () => unhover());
     listEl.appendChild(gEl);
   });
 }
@@ -349,6 +355,7 @@ function toggle(p){
     p.el.classList.toggle('off', !p.object.visible);
   }
   updateCount();
+  updateGroupIcons();
   pushHistory(prev);
   needsRender = true;
 }
@@ -382,6 +389,87 @@ function toggleGroup(groupParts, hideBtn){
   needsRender = true;
 }
 
+/* ---------- Подсветка + «рентген» при наведении ----------
+   Накладываем свечение (emissive) на подсвечиваемые детали, а всю остальную
+   модель делаем полупрозрачной («просвечивается сквозь другие детали»), чтобы
+   подсвеченная деталь была видна насквозь. Дёшево: меняются только emissive,
+   opacity и порядок отрисовки, пересчёт AO/теней не обязателен. Каждая деталь
+   владеет собственным клоном материала (см. collectParts), поэтому подсветка
+   одной группы/детали не «протекает» на другие. */
+const HIL_ON  = new THREE.Color(0x63b9ff);
+const HIL_OFF = new THREE.Color(0x000000);
+const XRAY_OPACITY = 0.15;      // прозрачность остальной модели в режиме «рентгена»
+const HL_RENDER_ORDER = 10;     // подсвеченные части рисуются поверх «рентгена»
+
+// mode: 'hl' (подсвечена, непрозрачная), 'xray' (полупрозрачная), 'off' (обычная)
+function setPartVisual(p, mode){
+  const hl = mode === 'hl';
+  const xray = mode === 'xray';
+  p.object.traverse(o => {
+      if (o.isMesh){
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      mats.forEach(m => {
+        if (m.emissive) m.emissive.copy(hl ? HIL_ON : HIL_OFF);
+        const t = hl || xray;
+        if (!!m.transparent !== t){ m.transparent = t; m.needsUpdate = true; }
+        if (hl){ m.opacity = 1.0; m.depthWrite = true; }
+        else if (xray){ m.opacity = XRAY_OPACITY; m.depthWrite = false; }
+        else {
+          // Вернуть исходное состояние материала (в т.ч. полупрозрачное стекло)
+          const o = m._hOrig;
+          if (o){
+            if (o.e && m.emissive) m.emissive.copy(o.e);
+            const tt = o.t;
+            if (!!m.transparent !== tt){ m.transparent = tt; m.needsUpdate = true; }
+            m.opacity = o.o;
+            m.depthWrite = o.d;
+          } else {
+            if (m.transparent){ m.transparent = false; m.needsUpdate = true; }
+            m.opacity = 1.0; m.depthWrite = true;
+          }
+        }
+      });
+      o.renderOrder = hl ? HL_RENDER_ORDER : 0;
+    }
+  });
+}
+
+// Текущее наведение: строка (имя группы) или объект детали, либо null.
+let hoverKey = null;
+
+function refreshVisuals(){
+  parts.forEach(p => {
+    let mode = 'off';
+    if (hoverKey === null) mode = 'off';
+    else if (typeof hoverKey === 'string') mode = (p.group === hoverKey) ? 'hl' : 'xray';
+    else mode = (p === hoverKey) ? 'hl' : 'xray';
+    setPartVisual(p, mode);
+  });
+  needsRender = true;
+}
+
+function hoverGroup(gname){ hoverKey = gname; refreshVisuals(); }
+function hoverPart(part){ hoverKey = part; refreshVisuals(); }
+function unhover(){ if (hoverKey !== null){ hoverKey = null; refreshVisuals(); } }
+
+/* ---------- Синхронизация глаз-иконок групп ----------
+   Открытый глаз (синий), если в группе есть хоть одна видимая деталь; перечёркнут
+   (серый), если группа полностью скрыта. Вызывается после любого изменения
+   видимости (одна деталь / группа / «Показать всё» / «Скрыть всё» / undo). */
+function updateGroupIcons(){
+  document.querySelectorAll('.group').forEach(g => {
+    const name = g.querySelector('.g-name').textContent.trim();
+    const grp = parts.filter(p => p.group === name);
+    const anyVisible = grp.some(p => p.object.visible);
+    const hideBtn = g.querySelector('.g-hide');
+    if (hideBtn){
+      hideBtn.innerHTML = eyeIcon(!anyVisible);
+      hideBtn.classList.toggle('off', !anyVisible);
+      hideBtn.title = anyVisible ? 'Скрыть группу' : 'Показать группу';
+    }
+  });
+}
+
 /* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
 const undoStack = [];
 const redoStack = [];
@@ -398,6 +486,7 @@ function applyState(state){
     }
   });
   updateCount();
+  updateGroupIcons();
   needsRender = true;
 }
 
@@ -478,12 +567,23 @@ function collectParts(root){
       if (o.isMesh){
         o.castShadow = true;
         o.receiveShadow = true;
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach(m => {
-          // Нейтральные отражения окружения (как в примере)
-          m.envMapIntensity = 0.45;
-          m.needsUpdate = true;
+        // Клонируем материал на каждый меш отдельно, чтобы подсветка группы
+        // (emissive) не «протекала» на соседние детали, делящие исходный материал.
+        const wasArray = Array.isArray(o.material);
+        const mats = wasArray ? o.material : [o.material];
+        const cloned = mats.map(m => {
+          const c = m.clone();
+          c.envMapIntensity = 0.45;   // нейтральные отражения окружения
+          // Запоминаем исходное состояние материала, чтобы корректно вернуть его
+          // после «рентгена» (в т.ч. для полупрозрачных деталей вроде стекла).
+          c._hOrig = {
+            t: !!c.transparent, o: c.opacity, d: !!c.depthWrite,
+            e: (c.emissive ? c.emissive.clone() : null)
+          };
+          c.needsUpdate = true;
+          return c;
         });
+        o.material = wasArray ? cloned : cloned[0];
       }
     });
     const nm = chooseName(child.name, i);
@@ -618,8 +718,8 @@ loader.load('./mops.glb',
 );
 
 /* ---------- Кнопки ---------- */
-document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
-document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); updateGroupIcons(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); updateGroupIcons(); pushHistory(prev); needsRender = true; };
 
 /* ---------- Сворачиваемый список деталей ----------
    Стрелка вверху списка: по клику список сворачивается вверх (▲) и
@@ -673,7 +773,10 @@ canvas.addEventListener('pointerup', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
-  canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
+  const pt = pickPart(e);
+  canvas.style.cursor = pt ? 'pointer' : 'grab';
+  // Подсветка + «рентген» детали под курсором (обновляем только при смене детали)
+  if (pt !== hoverKey){ hoverKey = pt; refreshVisuals(); }
 });
 
 /* ---------- Кубик видов ---------- */
@@ -734,5 +837,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36356e7ffc8bc1b',t:'MTc4ODU5MTQ0Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
