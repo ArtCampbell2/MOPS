@@ -176,7 +176,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.toneMappingExposure = 0.8;
+renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -188,6 +188,7 @@ scene.background = new THREE.Color(0xffffff);   // белый фон
 // чтобы не было «чёрной стороны» у блестящих материалов.
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+scene.environmentIntensity = 0.5;   // мягкое окружение, без яркого «солнечного» блика
 pmrem.dispose();
 
 /* Нейтральное стандартное освещение (фиксированное, без регуляторов):
@@ -212,9 +213,9 @@ function addShadowLight(dirVec, intensity){
   shadowRig.push(l);
   return l;
 }
-addShadowLight(new THREE.Vector3(0.6, 1.0, 0.6), 1.4);   // сверху-спереди (ключевой)
-addShadowLight(new THREE.Vector3(-1.0, 0.7, 0.3), 0.8);  // слева
-addShadowLight(new THREE.Vector3(0.3, 0.6, -1.0), 0.8);  // сзади-справа
+addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55); // свет сбоку-спереди (без «солнца» сверху)
+addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);  // слева
+addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);  // сзади-справа
 
 /* ---------- Камера ---------- */
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100000);
@@ -234,7 +235,7 @@ window.__n8ao = n8ao;
 
 // N8AO сам делает гамма-коррекцию (outputColorSpace), поэтому финального
 // OutputPass не нужно. Параметры берем из панели (см. applyAO ниже).
-n8ao.configuration.aoRadius = 10;            // Расстояние, мм (мировые юниты) — «Детали»
+n8ao.configuration.aoRadius = 100;            // Расстояние, мм (мировые юниты) — «Детали»
 n8ao.configuration.distanceFalloff = 1.0;
 n8ao.configuration.aoSamples = 24;            // Точность — «Детали»
 n8ao.configuration.denoiseSamples = 8;
@@ -374,7 +375,7 @@ function collectParts(root){
         const mats = Array.isArray(o.material) ? o.material : [o.material];
         mats.forEach(m => {
           // Нейтральные отражения окружения (как в примере)
-          m.envMapIntensity = 0.7;
+          m.envMapIntensity = 0.45;
           m.needsUpdate = true;
         });
       }
@@ -607,5 +608,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a360b4dc2b9dc03a',t:'MTc4ODU2MzgzNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36114199ab2e1e2',t:'MTc4ODU2NzczNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
