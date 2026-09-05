@@ -142,11 +142,11 @@
     <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
 
-    <!-- Счётчик убран -->
+    <!-- счётчик убран -->
     <div class="foot" style="border-top: none; padding-top: 4px;"></div>
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>навести на группу/деталь</b> — подсветить</div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть/показать · <b>навести на группу/деталь</b> — подсветить</div>
 
   <div class="view-cube">
     <div class="cube" id="cube">
@@ -262,9 +262,7 @@ let groundPlane = null;
 let modelBox    = null;
 
 function updateCount(){
-  // счётчик убран, оставляем заглушку чтобы не ломать логику
-  // document.getElementById('visible-count').textContent = `${v} / ${parts.length}`;
-  // document.getElementById('hidden-count').textContent = String(parts.length - v);
+  // счётчик убран
 }
 
 function chooseName(n, i){
@@ -659,7 +657,7 @@ loader.load('./mops.glb',
   }
 );
 
-/* ---------- Кнопки "Показать всё" / "Скрыть всё" (включая группы) ---------- */
+/* ---------- Кнопки "Показать всё" / "Скрыть всё" (обновляют группы) ---------- */
 document.getElementById('btn-all').onclick  = () => {
   const prev = snapshot();
   parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} });
@@ -695,7 +693,7 @@ listToggle.addEventListener('click', () => {
   listChevron.textContent = collapsed ? '▼' : '▲';
 });
 
-/* ---------- Двойной клик удалён ---------- */
+/* ---------- Двойной клик по модели (скрыть/показать) ---------- */
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const partByUuid = new Map();
@@ -705,7 +703,24 @@ function buildPartMap(){
   parts.forEach(p => p.object.traverse(o => { if (o.isMesh) partByUuid.set(o.uuid, p); }));
 }
 
-// оставляем только подсветку при наведении, двойной клик убран
+function setPointer(e){
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function pickPart(e){
+  setPointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const objs = parts.filter(p => p.object.visible).map(p => p.object);
+  if (!objs.length) return null;
+  const hits = raycaster.intersectObjects(objs, true);
+  if (!hits.length) return null;
+  let obj = hits[0].object;
+  while (obj && !partByUuid.has(obj.uuid)) obj = obj.parent;
+  return obj ? partByUuid.get(obj.uuid) : null;
+}
+
 let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
 let downX = 0, downY = 0;
 
@@ -713,10 +728,20 @@ canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.cli
 canvas.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
   if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
-  // двойной клик удалён: ничего не делаем
+  const now = performance.now();
+  const near = Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 8;
+  if (near && (now - lastClickT) < 350){
+    const p = pickPart(e);
+    if (p) toggle(p);
+    lastClickT = 0; lastClickX = -9999; lastClickY = -9999;
+  } else {
+    lastClickT = now; lastClickX = e.clientX; lastClickY = e.clientY;
+  }
 });
+
+// Подсветка при наведении на модель (для обратной связи)
 canvas.addEventListener('pointermove', (e) => {
-  canvas.style.cursor = 'grab';
+  canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
 });
 
 /* ---------- Кубик видов ---------- */
