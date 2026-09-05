@@ -429,7 +429,7 @@ function fitCamera(){
   shadowRig.forEach(l => {
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
-    l.shadow.mapSize.set(1024, 1024);   // легче для GPU, качество почти не меняется
+    l.shadow.mapSize.set(2048, 2048);   // легче для GPU, качество почти не меняется
     l.shadow.camera.left = -d; l.shadow.camera.right = d;
     l.shadow.camera.top = d;   l.shadow.camera.bottom = -d;
     l.shadow.camera.near = maxDim * 0.01;
