@@ -149,7 +149,7 @@
     <div class="foot"><span id="visible-count">0 / 0</span> видимо · <span id="hidden-count">0</span> скрыто</div>
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть</div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть · <b>навести на группу/деталь</b> — подсветить</div>
 
   <div class="view-cube">
     <div class="cube" id="cube">
@@ -331,12 +331,18 @@ function buildList(){
       el.innerHTML = `<span class="check"></span><span class="dot" style="background:${new THREE.Color(p.color).getStyle()}"></span><span class="name"></span>`;
       el.querySelector('.name').textContent = p.name;
       el.addEventListener('click', (ev) => { ev.stopPropagation(); toggle(p); });
+      // Наведение на строку детали — подсвечиваем отдельную деталь в сцене
+      el.addEventListener('mouseenter', () => setPartHighlight(p, true));
+      el.addEventListener('mouseleave', () => setPartHighlight(p, false));
       p.el = el;
       gBody.appendChild(el);
     });
     gEl.appendChild(gBody);
 
     gHead.addEventListener('click', () => gEl.classList.toggle('collapsed'));
+    // Наведение на группу — подсвечиваем её детали в сцене (дёшево по GPU)
+    gHead.addEventListener('mouseenter', () => setGroupHighlight(glist, true));
+    gHead.addEventListener('mouseleave', () => setGroupHighlight(glist, false));
     listEl.appendChild(gEl);
   });
 }
@@ -380,6 +386,101 @@ function toggleGroup(groupParts, hideBtn){
   updateCount();
   pushHistory(prev);
   needsRender = true;
+}
+
+/* ---------- Подсветка группы/детали при наведении ----------
+   Дёшево по GPU и без «глюков»: меняем только emissive-компоненту материала
+   (это юниформ-обновление, шейдер не пересобирается). N8AO считает AO по
+   глубине/нормалям, поэтому AO-картинка не меняется и ничего не мигает.
+   Material у каждой детали клонирован при загрузке, поэтому подсветка не
+   переносится на другие группы, делящие исходный материал.
+   Режим «рентген»: подсвеченные меши рисуются ПОВЕРХ остальных — отключаем
+   у них тест/запись глубины и поднимаем renderOrder, чтобы деталь была видна
+   даже когда её физически перекрывают другие детали. */
+const HILITE_COLOR = new THREE.Color(0x63b9ff);   // синее свечение в тон акцента
+const HILITE_INTENSITY = 0.85;
+const XRAY_RENDER_ORDER = 5000;                   // выше любых обычных мешей
+
+const _hlSaved = new Map();      // material -> {emissive, emissiveIntensity, depthTest, depthWrite}
+const _objSaved = new Map();     // mesh -> baseRenderOrder
+let _hlActive = new Set();       // материалы, подсвеченные сейчас
+let _hlParts = null;             // подсвеченный массив деталей (группа или [одна деталь])
+let _hlId    = null;             // идентификатор подсвеченного объекта (для сравнения)
+
+// Собрать все уникальные меши набора деталей (группы или одной детали)
+function collectMeshes(partsArr){
+  const meshes = new Set();
+  partsArr.forEach(p => {
+    p.object.traverse(o => { if (o.isMesh) meshes.add(o); });
+  });
+  return meshes;
+}
+
+// Применить / снять подсветку на наборе мешей (emissive + рентген-наложение)
+function applyHilite(meshes, on){
+  meshes.forEach(o => {
+    if (!o.isMesh) return;
+    if (on){
+      if (!_objSaved.has(o)) _objSaved.set(o, o.renderOrder);
+      o.renderOrder = XRAY_RENDER_ORDER;   // рисовать поверх всех остальных
+    } else {
+      const ro = _objSaved.get(o);
+      if (ro !== undefined){ o.renderOrder = ro; _objSaved.delete(o); }
+    }
+    const arr = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+    arr.forEach(m => {
+      if (!m) return;
+      if (on){
+        if (!_hlSaved.has(m)){
+          _hlSaved.set(m, { emissive: m.emissive ? m.emissive.clone() : null, ei: m.emissiveIntensity, dt: m.depthTest, dw: m.depthWrite });
+        }
+        if (m.emissive){
+          m.emissive.copy(HILITE_COLOR);
+          m.emissiveIntensity = HILITE_INTENSITY;
+        }
+        m.depthTest = false;    // игнорировать глубину -> просвечивать сквозь другие
+        m.depthWrite = false;
+        _hlActive.add(m);
+      } else {
+        const saved = _hlSaved.get(m);
+        if (saved){
+          if (saved.emissive && m.emissive) m.emissive.copy(saved.emissive);
+          m.emissiveIntensity = saved.ei;
+          m.depthTest = saved.dt;
+          m.depthWrite = saved.dw;
+          _hlSaved.delete(m);
+        }
+        _hlActive.delete(m);
+      }
+    });
+  });
+}
+
+// Универсальная подсветка набора деталей (группа целиком ИЛИ одна деталь).
+// id используется, чтобы не «дребезжать» при повторном входе в тот же объект.
+function setHilite(partsArr, on, id){
+  if (!partsArr || !partsArr.length) return;
+  // Повторный вход в тот же объект — ничего не делаем
+  if (on && _hlId === id) return;
+  if (!on && _hlId === null) return;
+
+  // Был подсвечен другой объект — снимаем его подсветку
+  if (_hlParts && _hlId !== id) applyHilite(collectMeshes(_hlParts), false);
+
+  applyHilite(collectMeshes(partsArr), on);
+  _hlParts = on ? partsArr : null;
+  _hlId    = on ? id : null;
+  needsRender = true;   // один пересчёт кадра при входе/выходе — этого достаточно
+}
+
+// Подсветка группы целиком при наведении на её шапку
+function setGroupHighlight(groupParts, on){
+  setHilite(groupParts, on, groupParts);
+}
+
+// Подсветка одной детали при наведении на пункт списка
+function setPartHighlight(part, on){
+  setHilite([part], on, part);
 }
 
 /* ---------- История: Отмена / Вернуть (Undo / Redo) ---------- */
@@ -475,12 +576,21 @@ function collectParts(root){
       if (o.isMesh){
         o.castShadow = true;
         o.receiveShadow = true;
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        mats.forEach(m => {
-          // Нейтральные отражения окружения (как в примере)
-          m.envMapIntensity = 0.45;
-          m.needsUpdate = true;
-        });
+        // Клонируем материал у каждой детали, чтобы у неё был СВОЙ экземпляр.
+        // Так подсветка группы (смена emissive) не «протекает» на другие детали,
+        // которые в исходной модели делят один и тот же материал.
+        if (Array.isArray(o.material)){
+          o.material = o.material.map(m => {
+            const c = m.clone();
+            c.envMapIntensity = 0.45;
+            c.needsUpdate = true;
+            return c;
+          });
+        } else if (o.material){
+          o.material = o.material.clone();
+          o.material.envMapIntensity = 0.45;
+          o.material.needsUpdate = true;
+        }
       }
     });
     const nm = chooseName(child.name, i);
@@ -731,5 +841,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362b1d4d9f9e1e2',t:'MTc4ODU4NDY4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362cb7129ccc939',t:'MTc4ODU4NTczMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
