@@ -25,12 +25,18 @@
   .actions-row{display:flex;gap:8px;}
   .actions-row+.actions-row{margin-top:8px;}
 
+  /* ---------- Сворачиваемый список деталей ---------- */
+  .list-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;transition:background .12s;}
+  .list-toggle:hover{background:var(--panel2);}
+  .list-toggle .chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:10px;line-height:1;transition:transform .18s,background .12s;}
+  .list-toggle:hover .chevron{background:#26303a;border-color:var(--accent);}
+  #list.collapsed{display:none;}
+
   /* ---------- Undo / Redo ---------- */
   .hist-btn{display:flex;align-items:center;justify-content:center;gap:6px;}
   .hist-btn .arrow{font-size:15px;line-height:1;}
   .hist-btn .kbd{font-size:10px;color:var(--muted);opacity:.7;margin-left:2px;}
   #btn-undo{border-color:#3a4b5c;}
-  #btn-redo{border-color:#3a4b5c;}
   .hotkey-note{font-size:10px;color:var(--muted);opacity:.6;text-align:center;margin-top:5px;}
 
   .list{overflow-y:auto;flex:1;padding:6px;scrollbar-width:thin;scrollbar-color:#3a4b5c transparent;}
@@ -114,22 +120,18 @@
       <div class="actions-row">
         <button class="btn" id="btn-all">Показать всё</button>
         <button class="btn" id="btn-none">Скрыть всё</button>
-        <button class="btn primary" id="btn-reset" title="Сбросить камеру">⟲</button>
       </div>
       <div class="actions-row">
-        <button class="btn hist-btn" id="btn-undo" title="Отменить (Ctrl+Z)" disabled>
-          <span class="arrow">↶</span> Отмена <span class="kbd">Ctrl+Z</span>
-        </button>
-        <button class="btn hist-btn" id="btn-redo" title="Повторить (Ctrl+Y)" disabled>
-          <span class="arrow">↷</span> Вернуть <span class="kbd">Ctrl+Y</span>
+        <button class="btn hist-btn" id="btn-undo" title="Вернуть деталь (Ctrl+Z)" disabled>
+          <span class="arrow">↶</span> Вернуть деталь <span class="kbd">Ctrl+Z</span>
         </button>
       </div>
     </div>
+    <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
 
     <div class="light-section">
       <h4>Ambient Occlusion (N8AO)</h4>
-      <div class="ctl ao-toggle"><input type="checkbox" id="ao-enable" checked><label for="ao-enable">Включить AO</label></div>
       <div class="ctl"><span class="online">Пресет «Детали» — радиус 100 мм · фактор 10 · точность 24</span></div>
     </div>
 
@@ -172,7 +174,7 @@ const loadErr = document.getElementById('load-err');
 
 /* ---------- Рендер ---------- */
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));   // производительность
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.NoToneMapping;
@@ -245,6 +247,10 @@ n8ao.configuration.intensity = 10.0;          // Фактор (контраст 
 n8ao.configuration.screenSpaceRadius = false; // мировой радиус
 n8ao.configuration.gammaCorrection = true;
 n8ao.configuration.renderMode = 0;            // 0 = Combined (красота + AO)
+// Производительность: считаем AO в половинном разрешении и апскейлим с учётом
+// глубины — почти незаметно на глаз, но заметно быстрее на слабых GPU.
+n8ao.configuration.halfRes = true;
+n8ao.configuration.depthAwareUpsampling = true;
 composer.addPass(n8ao);
 composer.addPass(new SMAAPass(window.innerWidth, window.innerHeight));
 
@@ -303,7 +309,6 @@ function toggle(p){
 const undoStack = [];
 const redoStack = [];
 const btnUndo = document.getElementById('btn-undo');
-const btnRedo = document.getElementById('btn-redo');
 
 function snapshot(){ return parts.map(p => p.object.visible); }
 
@@ -340,13 +345,11 @@ function redo(){
 }
 
 function updateButtons(){
-  const u = undoStack.length > 0, r = redoStack.length > 0;
+  const u = undoStack.length > 0;
   btnUndo.disabled = !u; btnUndo.classList.toggle('disabled', !u);
-  btnRedo.disabled = !r; btnRedo.classList.toggle('disabled', !r);
 }
 
 btnUndo.addEventListener('click', undo);
-btnRedo.addEventListener('click', redo);
 
 // Горячие клавиши
 window.addEventListener('keydown', (e) => {
@@ -426,7 +429,7 @@ function fitCamera(){
   shadowRig.forEach(l => {
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
-    l.shadow.mapSize.set(2048, 2048);
+    l.shadow.mapSize.set(1024, 1024);   // легче для GPU, качество почти не меняется
     l.shadow.camera.left = -d; l.shadow.camera.right = d;
     l.shadow.camera.top = d;   l.shadow.camera.bottom = -d;
     l.shadow.camera.near = maxDim * 0.01;
@@ -455,21 +458,18 @@ function addGround(center, maxDim, floorY){
    Фиксированный пресет «Детали»: радиус 100 мм, контраст (intensity) 10,
    точность 24 сэмпла. Ползунки не используются. */
 const $id = id => document.getElementById(id);
-const aoEnable  = $id('ao-enable');
 
 const AO_DETAILS = { radius: 100, intensity: 10.0, samples: 24 };
 
 function applyAO(){
-  const on = aoEnable.checked;
   if (n8ao){
     n8ao.configuration.aoRadius   = AO_DETAILS.radius;                // мм (мировые юниты)
     n8ao.configuration.aoSamples  = AO_DETAILS.samples;
-    n8ao.configuration.intensity  = on ? AO_DETAILS.intensity : 0;    // контраст затемнения
+    n8ao.configuration.intensity  = AO_DETAILS.intensity;             // контраст затемнения (всегда)
     n8ao.configuration.renderMode = 0;                                // Combined (красота + AO)
   }
   needsRender = true;
 }
-aoEnable.addEventListener('change', applyAO);
 applyAO();
 
 /* ---------- Загрузка ---------- */
@@ -503,7 +503,16 @@ loader.load('./mops.glb',
 /* ---------- Кнопки ---------- */
 document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
 document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
-document.getElementById('btn-reset').onclick = () => fitCamera();
+
+/* ---------- Сворачиваемый список деталей ----------
+   Стрелка вверху списка: по клику список сворачивается вверх (▲) и
+   разворачивается вниз (▼). */
+const listToggle  = $id('list-toggle');
+const listChevron = $id('list-chevron');
+listToggle.addEventListener('click', () => {
+  const collapsed = listEl.classList.toggle('collapsed');
+  listChevron.textContent = collapsed ? '▼' : '▲';
+});
 
 /* ---------- Двойной клик по детали ---------- */
 const raycaster = new THREE.Raycaster();
@@ -608,5 +617,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36114199ab2e1e2',t:'MTc4ODU2NzczNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
