@@ -88,6 +88,14 @@
   .face.top{transform:rotateX(90deg) translateZ(48px);}
   .face.bottom{transform:rotateX(-90deg) translateZ(48px);}
 
+  /* ---------- Рулетка (замер расстояния) — ОТКЛЮЧЕНО, вернуть позже ----------
+  #measure-btn{position:absolute;top:16px;right:16px;z-index:30;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:background .15s,border-color .15s,color .15s;box-shadow:0 6px 16px rgba(0,0,0,.3);}
+  #measure-btn:hover{background:#26303a;border-color:#3a4b5c;color:var(--text);}
+  #measure-btn.on{color:#0b1a4a;background:var(--accent);border-color:var(--accent);}
+  #measure-btn svg{width:22px;height:22px;display:block;}
+  #measure-label{position:absolute;z-index:30;transform:translate(-50%,-100%);padding:4px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--accent);color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;pointer-events:none;display:none;box-shadow:0 4px 12px rgba(0,0,0,.35);}
+  ---------- */
+
   #overlay{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);color:var(--muted);gap:16px;transition:opacity .5s;}
   #overlay.gone{opacity:0;pointer-events:none;}
   .spinner{width:46px;height:46px;border-radius:50%;border:4px solid #22303a;border-top-color:var(--accent);animation:spin 1s linear infinite;}
@@ -126,6 +134,17 @@
 <body>
 <div id="app">
   <canvas id="canvas"></canvas>
+
+  <!-- [РУЛЕТКА ОТКЛЮЧЕНА] Кнопка и подпись замера скрыты, код в JS закомментирован.
+  <button id="measure-btn" title="Рулетка — замерить расстояние (клик по двум точкам, Esc — отмена)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="9" width="20" height="6" rx="1"/>
+      <path d="M6 9v3M9 9v3M12 9v3M15 9v3M18 9v3"/>
+      <path d="M2 11h1M21 11h1"/>
+    </svg>
+  </button>
+  <div id="measure-label"></div>
+  -->
 
   <div id="panel">
     <div class="head">
@@ -349,8 +368,27 @@ function toggle(p){
     p.el.classList.toggle('off', !p.object.visible);
   }
   updateCount();
+  updateGroupIcons();
   pushHistory(prev);
   needsRender = true;
+}
+
+/* Обновить глаз-иконки групп под текущую видимость:
+   глаз открыт (синий), если в группе есть хоть одна видимая деталь; перечёркнут
+   (серый), если группа полностью скрыта. Вызывается после любого изменения
+   видимости (одна деталь / вся группа / «Показать всё» / «Скрыть всё» / undo). */
+function updateGroupIcons(){
+  document.querySelectorAll('.group').forEach(g => {
+    const name = g.querySelector('.g-name').textContent.trim();
+    const grp = parts.filter(p => p.group === name);
+    const anyVisible = grp.some(p => p.object.visible);
+    const hideBtn = g.querySelector('.g-hide');
+    if (hideBtn){
+      hideBtn.innerHTML = eyeIcon(!anyVisible);
+      hideBtn.classList.toggle('off', !anyVisible);
+      hideBtn.title = anyVisible ? 'Скрыть группу' : 'Показать группу';
+    }
+  });
 }
 
 /* SVG-иконки глаза (через currentColor): открытый глаз / перечёркнутый глаз */
@@ -398,6 +436,7 @@ function applyState(state){
     }
   });
   updateCount();
+  updateGroupIcons();
   needsRender = true;
 }
 
@@ -618,8 +657,8 @@ loader.load('./mops.glb',
 );
 
 /* ---------- Кнопки ---------- */
-document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
-document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); updateGroupIcons(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); updateGroupIcons(); pushHistory(prev); needsRender = true; };
 
 /* ---------- Сворачиваемый список деталей ----------
    Стрелка вверху списка: по клику список сворачивается вверх (▲) и
@@ -657,11 +696,15 @@ function pickPart(e){
 }
 
 let lastClickT = 0, lastClickX = -9999, lastClickY = -9999;
-let downX = 0, downY = 0;
-canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+let downX = 0, downY = 0, dragMoved = false;
+canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; dragMoved = false; });
 canvas.addEventListener('pointerup', (e) => {
   if (e.button !== 0) return;
-  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
+  const moved = Math.hypot(e.clientX - downX, e.clientY - downY) > 6;
+  // [РУЛЕТКА ОТКЛЮЧЕНА] Перетаскивание — просто игнорируем (не скрываем деталь по случайному двойному клику).
+  if (moved) return;
+  // [РУЛЕТКА ОТКЛЮЧЕНА]
+  // if (measure.on){ placeMeasurePoint(e); lastClickT = 0; lastClickX = -9999; lastClickY = -9999; return; }
   const now = performance.now();
   const near = Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 8;
   if (near && (now - lastClickT) < 350){
@@ -673,7 +716,279 @@ canvas.addEventListener('pointerup', (e) => {
   }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) dragMoved = true;
+  // Во время замера: показываем красный кружок-прицел, не переопределяем курсор
+  if (measure.on){
+    updateSnapPreview(e);
+    return;
+  }
   canvas.style.cursor = pickPart(e) ? 'pointer' : 'grab';
+});
+
+/* ---------- Рулетка (замер расстояния) ----------
+   Иконка в правом верхнем углу включает режим замера: курсор — синий кружок.
+   Клики по модели ставят точки (с привязкой к ближайшей вершине или ребру), две
+   точки соединяются синей линией, над серединой — размер. Пока рулетка активна,
+   модель можно свободно вращать/приближать (точки закреплены в пространстве
+   модели); маркеры держат постоянный экранный размер независимо от зума.
+   Завершённая линия исчезает при повороте модели (перетаскивании), Esc — выход. */
+const measure = { on:false, p1:null, dot1:null, line:null };
+const measureBtn = document.getElementById('measure-btn');
+const measureLabel = document.getElementById('measure-label');
+const MEASURE_COLOR = 0x3fa9f5;
+const MARKER_PX = 6;    // постоянный экранный радиус точек (пиксели)
+const LINE_PX   = 2.5;  // постоянная экранная толщина линии (пиксели)
+const MEASURE_CURSOR = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='30' height='30'><circle cx='15' cy='15' r='11' fill='rgba(63,169,245,.18)' stroke='%233fa9f5' stroke-width='2'/><circle cx='15' cy='15' r='2.5' fill='%233fa9f5'/></svg>\") 15 15, crosshair";
+
+// Объекты, чей размер поддерживается постоянным на экране: {obj, getPos, isCyl, px}
+const screenMarkers = [];
+function registerScreenMarker(obj, getPos, isCyl, px, persistent, keepY){
+  screenMarkers.push({ obj, getPos, isCyl, px, persistent: !!persistent, keepY: !!keepY });
+}
+
+// Красный кружок-прицел рулетки: появляется, когда курсор «примагничен» к ближайшей
+// вершине или ребру, показывая куда попадёт точка по клику. Держит постоянный
+// экранный размер и не удаляется при очистке замера (persistent=true).
+const PREVIEW_PX = 8;
+const PREVIEW_COLOR = 0xff3b30;
+const snapPreview = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 20),
+  new THREE.MeshBasicMaterial({ color: PREVIEW_COLOR, depthTest: false, transparent: true, opacity: 0.9 }));
+snapPreview.renderOrder = 6000;
+snapPreview.visible = false;
+scene.add(snapPreview);
+registerScreenMarker(snapPreview, () => snapPreview.position, false, PREVIEW_PX, true);
+
+// Призрак-линия замера: после первой точки показывает «линейку на 90°» — прямой
+// отрезок вдоль выбранной оси, чтобы было видно, какой размер получится, и можно
+// было поправить, прежде чем кликнуть. Красный, полупрозрачный, постоянной толщины.
+const ghostLine = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 10, 1, false),
+  new THREE.MeshBasicMaterial({ color: 0xff5a5a, depthTest: true, transparent: true, opacity: 0.5 }));
+ghostLine.renderOrder = 5900;
+ghostLine.visible = false;
+scene.add(ghostLine);
+registerScreenMarker(ghostLine, () => ghostLine.position, true, LINE_PX, /*persistent*/ true, /*keepY*/ true);
+
+// Спроецировать точку c на главную мировую ось (X/Y/Z) относительно p1, чтобы линия
+// шла строго параллельно оси (под 90°), а не по диагонали — размер получается
+// корректным (прямая длина по оси, а не гипотенуза).
+function lockAxis(p1, c){
+  const dx = Math.abs(c.x - p1.x), dy = Math.abs(c.y - p1.y), dz = Math.abs(c.z - p1.z);
+  const out = p1.clone();
+  if (dx >= dy && dx >= dz){ out.x = c.x; }
+  else if (dy >= dz){ out.y = c.y; }
+  else { out.z = c.z; }
+  return out;
+}
+
+// Пересчитать размеры маркеров под текущую камеру (каждый кадр),
+// чтобы точки/линия не «раздувались» при приближении и не исчезали при отдалении.
+function updateScreenMarkers(){
+  if (!screenMarkers.length) return;
+  const H = canvas.clientHeight || 1;
+  const t = Math.tan(camera.fov * Math.PI / 360);
+  for (const m of screenMarkers){
+    const r = m.px * 2 * t / Math.max(H, 1) * m.getPos().distanceTo(camera.position);
+    if (m.isCyl){ m.obj.scale.set(r, 1, r); }
+    else { m.obj.scale.setScalar(r); }
+  }
+}
+
+// Спроецировать мировую точку в экранные координаты (для подписи с размером)
+function worldToScreen(v){
+  const p = v.clone().project(camera);
+  const rect = canvas.getBoundingClientRect();
+  return { x: (p.x * 0.5 + 0.5) * rect.width, y: (-p.y * 0.5 + 0.5) * rect.height, ndcZ: p.z };
+}
+
+// Ближайшая точка на отрезке AB к точке P (для привязки к ребру)
+function closestOnSeg(p, a, b){
+  const ab = new THREE.Vector3().subVectors(b, a);
+  const t = Math.max(0, Math.min(1, new THREE.Vector3().subVectors(p, a).dot(ab) / Math.max(ab.lengthSq(), 1e-9)));
+  return a.clone().addScaledVector(ab, t);
+}
+
+// Луч в сцену; возвращает пересечение (объект, грань, точку) или null
+function raycastModel(e){
+  setPointer(e);
+  raycaster.setFromCamera(pointer, camera);
+  const objs = parts.filter(p => p.object.visible).map(p => p.object);
+  if (!objs.length) return null;
+  const hits = raycaster.intersectObjects(objs, true);
+  return hits.length ? hits[0] : null;
+}
+
+// Привязка точки к ближайшей вершине/ребру треугольника
+function snapToMesh(hit){
+  const point = hit.point;
+  const pos = hit.object.geometry.attributes.position;
+  const m = hit.object.matrixWorld;
+  const ia = hit.face.a, ib = hit.face.b, ic = hit.face.c;
+  const va = new THREE.Vector3().fromBufferAttribute(pos, ia).applyMatrix4(m);
+  const vb = new THREE.Vector3().fromBufferAttribute(pos, ib).applyMatrix4(m);
+  const vc = new THREE.Vector3().fromBufferAttribute(pos, ic).applyMatrix4(m);
+  const cands = [{pt: va, d: va.distanceTo(point)}, {pt: vb, d: vb.distanceTo(point)}, {pt: vc, d: vc.distanceTo(point)}];
+  [[va, vb], [vb, vc], [vc, va]].forEach(([A, B]) => {
+    const C = closestOnSeg(point, A, B);
+    cands.push({pt: C, d: C.distanceTo(point)});
+  });
+  cands.sort((x, y) => x.d - y.d);
+  const snapDist = modelMaxDim * 0.03;   // «магнит» ~3% габарита модели
+  const snapped = cands[0].d <= snapDist;
+  return { pt: snapped ? cands[0].pt : point, snapped };
+}
+
+// Обновить красный кружок-прицел по позиции курсора: показывается только когда
+// точка «примагничена» к вершине/ребру (по клику установится именно она), чтобы
+// было видно, куда попадёт клик, но при этом не мешало искать другую грань.
+function updateSnapPreview(e){
+  const hit = raycastModel(e);
+  if (!hit){
+    if (snapPreview.visible){ snapPreview.visible = false; needsRender = true; }
+    return;
+  }
+  const s = snapToMesh(hit);
+  if (!s.snapped){
+    if (snapPreview.visible){ snapPreview.visible = false; needsRender = true; }
+    return;
+  }
+  if (!snapPreview.visible){
+    snapPreview.visible = true;
+    snapPreview.position.copy(s.pt);
+    needsRender = true;
+  } else if (snapPreview.position.distanceToSquared(s.pt) > 1e-6){
+    snapPreview.position.copy(s.pt);
+    needsRender = true;
+  }
+}
+
+// Запомнить первую точку (маленькая точка с постоянным экранным размером)
+function placeMeasurePoint(e){
+  const hit = raycastModel(e);
+  if (!hit) return;
+  const pt = snapToMesh(hit).pt;
+  if (!measure.p1){
+    measure.p1 = pt;
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16),
+      new THREE.MeshBasicMaterial({ color: MEASURE_COLOR, depthTest: false, transparent: true, opacity: 0.95 }));
+    dot.position.copy(pt);
+    dot.renderOrder = 6000;
+    scene.add(dot);
+    measure.dot1 = dot;
+    registerScreenMarker(dot, () => pt, false, MARKER_PX);
+    needsRender = true;
+    return;
+  }
+  // вторая точка — рисуем линию между p1 и pt
+  drawMeasure(measure.p1, pt);
+  measure.p1 = null;
+  measure.on = false;            // выходим из режима постановки точек
+  setCursorMeasure(false);
+  measureBtn.classList.remove('on');
+  needsRender = true;
+}
+
+// Линия постоянной (пересчитываемой) толщины + две точки постоянного размера
+function makeLine(a, b){
+  const dir = new THREE.Vector3().subVectors(b, a);
+  const len = dir.length();
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: MEASURE_COLOR, depthTest: false, transparent: true, opacity: 0.95 });
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, len, 12, 1, false), mat);
+  cyl.position.copy(a).add(b).multiplyScalar(0.5);
+  cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  cyl.renderOrder = 6000;
+  group.add(cyl);
+  const dotGeo = new THREE.SphereGeometry(1, 16, 16);
+  const dotA = new THREE.Mesh(dotGeo, mat); dotA.position.copy(a); dotA.renderOrder = 6000;
+  const dotB = new THREE.Mesh(dotGeo, mat); dotB.position.copy(b); dotB.renderOrder = 6000;
+  group.add(dotA); group.add(dotB);
+  group.userData.pA = a; group.userData.pB = b;
+  registerScreenMarker(cyl, () => new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5), true, LINE_PX);
+  registerScreenMarker(dotA, () => a, false, MARKER_PX);
+  registerScreenMarker(dotB, () => b, false, MARKER_PX);
+  return group;
+}
+
+function drawMeasure(a, b){
+  clearMeasure();          // убрать предыдущий замер / незавершённую точку
+  measure.line = makeLine(a, b);
+  scene.add(measure.line);
+  updateMeasureLabel();
+  needsRender = true;
+}
+
+// Подпись с размером над серединой линии (позиция обновляется каждый кадр)
+function updateMeasureLabel(){
+  if (!measure.line) return;
+  const a = measure.line.userData.pA, b = measure.line.userData.pB;
+  const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+  const s = worldToScreen(mid);
+  const dist = a.distanceTo(b);
+  const txt = dist >= 1000 ? (dist / 1000).toFixed(2) + ' м' : Math.round(dist) + ' мм';
+  measureLabel.textContent = txt;
+  measureLabel.style.display = 'block';
+  measureLabel.style.left = s.x + 'px';
+  measureLabel.style.top = (s.y - 26) + 'px';
+}
+
+// Убрать только завершённую линию (незавершённую первую точку не трогаем)
+function clearCompletedLine(){
+  if (measure.line){ scene.remove(measure.line); measure.line = null; }
+  measureLabel.style.display = 'none';
+  needsRender = true;
+}
+
+// Убрать всё: линию, незавершённую точку и подпись
+function clearMeasure(){
+  if (measure.line){ scene.remove(measure.line); measure.line = null; }
+  if (measure.dot1){ scene.remove(measure.dot1); measure.dot1 = null; }
+  measure.p1 = null;
+  measureLabel.style.display = 'none';
+  snapPreview.visible = false;
+  // убрать только маркеры линии/точек (красный прицел остаётся зарегистрированным)
+  for (let i = screenMarkers.length - 1; i >= 0; i--){
+    if (!screenMarkers[i].persistent) screenMarkers.splice(i, 1);
+  }
+  needsRender = true;
+}
+
+function setCursorMeasure(on){
+  canvas.style.cursor = on ? MEASURE_CURSOR : 'grab';
+}
+
+// Для отладки/тестов
+window.__measure = measure;
+window.__markers = screenMarkers;
+window.__camera = camera;
+window.__snapPreview = snapPreview;
+
+measureBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (measure.on){
+    // повторно кликнули иконку — выключить и убрать замер
+    measure.on = false;
+    clearMeasure();
+    setCursorMeasure(false);
+    measureBtn.classList.remove('on');
+  } else {
+    clearMeasure();
+    measure.on = true;
+    setCursorMeasure(true);
+    measureBtn.classList.add('on');
+  }
+});
+
+// Esc — отменяет/выходит из режима замера полностью
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape'){
+    const wasOn = measure.on;
+    clearMeasure();
+    if (wasOn){
+      measure.on = false;
+      setCursorMeasure(false);
+      measureBtn.classList.remove('on');
+    }
+  }
 });
 
 /* ---------- Кубик видов ---------- */
@@ -728,11 +1043,13 @@ controls.addEventListener('change', () => { needsRender = true; });
 renderer.setAnimationLoop(() => {
   controls.update();
   updateViewCube();
+  updateScreenMarkers();          // держим точки/линию постоянного экранного размера
+  if (measure.line) updateMeasureLabel();  // подпись следует за линией при зуме
   if (needsRender){
     composer.render();
     needsRender = false;
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a362e9354aacce1b',t:'MTc4ODU4Njk0OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36330d4bc8bc037',t:'MTc4ODU4OTg4Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
