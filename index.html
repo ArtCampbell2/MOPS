@@ -26,7 +26,6 @@
   .actions-row{display:flex;gap:8px;}
   .actions-row+.actions-row{margin-top:8px;}
 
-  /* ---------- Сворачиваемый список деталей ---------- */
   .list-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;transition:background .12s;}
   .list-toggle:hover{background:var(--panel2);}
   .list-toggle .chevron{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font-size:10px;line-height:1;transition:transform .18s,background .12s;}
@@ -47,7 +46,6 @@
   .item .name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .item.off .name{color:var(--muted);text-decoration:line-through;}
 
-  /* ---------- Дерево групп ---------- */
   .group{margin-bottom:4px;}
   .group-head{display:flex;align-items:center;gap:8px;padding:7px 10px;margin:3px 0;border-radius:8px;cursor:pointer;user-select:none;background:var(--panel2);border:1px solid var(--border);transition:background .12s,border-color .12s;}
   .group-head:hover{background:#26303a;border-color:#3a4b5c;}
@@ -66,7 +64,7 @@
   .empty{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
   .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6;}
 
-  /* ---------- Секция сечения ---------- */
+  /* Секция сечения */
   .section{border-top:1px solid var(--border);padding:10px 14px;}
   .section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .section-title{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;}
@@ -145,7 +143,7 @@
     <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
 
-    <!-- НОВЫЙ БЛОК: Сечение -->
+    <!-- Блок сечения -->
     <div class="section" id="clip-section">
       <div class="section-head">
         <span class="section-title">Сечение</span>
@@ -214,6 +212,8 @@ renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Включаем локальное отсечение (на всякий случай, хотя по умолчанию true)
+renderer.localClippingEnabled = true;
 
 /* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
@@ -286,7 +286,7 @@ let modelRoot   = null;
 let groundPlane = null;
 let modelBox    = null;
 
-/* ---------- Новые переменные для сечения ---------- */
+/* ---------- Переменные сечения ---------- */
 let clipEnabled = false;
 let clipAxis = 'x';
 let clipPosition = 0;
@@ -720,13 +720,14 @@ function updateClipPlaneVisual() {
 }
 
 function updateClipping() {
+  // Создаём новую плоскость каждый раз
   const normal = new THREE.Vector3(0, 0, 0);
   if (clipAxis === 'x') normal.set(1, 0, 0);
   else if (clipAxis === 'y') normal.set(0, 1, 0);
   else normal.set(0, 0, 1);
-  clipPlane.normal.copy(normal);
-  clipPlane.constant = -clipPosition;
+  clipPlane = new THREE.Plane(normal, -clipPosition);
 
+  // Применяем ко всем материалам деталей
   parts.forEach(p => {
     p.object.traverse(o => {
       if (o.isMesh) {
@@ -741,6 +742,11 @@ function updateClipping() {
       }
     });
   });
+
+  // Отключаем N8AO при активном сечении, чтобы не мешал
+  if (n8ao) {
+    n8ao.enabled = !clipEnabled;
+  }
 
   if (clipPlaneMesh) {
     clipPlaneMesh.visible = clipEnabled;
@@ -813,7 +819,7 @@ loader.load('./mops.glb',
     updateCount();
     syncGroupButtons();
     applyAO();
-    initClippingUI();   // <-- Инициализация сечения после получения modelBox
+    initClippingUI();
     overlay.classList.add('gone');
     setTimeout(() => overlay.remove(), 600);
     setTimeout(() => document.getElementById('hint').classList.add('fade'), 6000);
