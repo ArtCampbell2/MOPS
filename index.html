@@ -72,7 +72,7 @@
   .group.collapsed .group-body{display:none;}
 
   .empty{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5;}
- 
+  .foot{padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.6;}
 
   #hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(16,20,24,.7);border:1px solid var(--border);border-radius:30px;padding:8px 16px;font-size:12px;color:var(--muted);white-space:nowrap;backdrop-filter:blur(4px);transition:opacity .4s;pointer-events:none;}
   #hint b{color:var(--text);font-weight:600;}
@@ -146,10 +146,10 @@
     <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
     <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
 
-    <div class="foot"><span id="visible-count">0 / 0</span> <span id="hidden-count">0</span> скрыто</div>
+    <div class="foot"><span id="hidden-count">0</span> скрыто</div>
   </div>
 
-  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>Двойной клик по детали</b> — скрыть · </div>
+  <div id="hint"><b>ЛКМ</b> — вращать · <b>Колесо</b> — масштаб · <b>ПКМ</b> — панорама<br><b>навести на группу/деталь</b> — подсветить</div>
 
   <div class="view-cube">
     <div class="cube" id="cube">
@@ -280,8 +280,10 @@ let modelRoot   = null;   // корень модели (для габарито�
 let groundPlane = null;   // пол с контактной тенью
 let modelBox    = null;   // габариты модели для AO-клипа (scene clip box)
 
-
-
+function updateCount(){
+  const v = parts.filter(p => !p.object.visible).length;
+  document.getElementById('hidden-count').textContent = String(v);
+}
 
 function chooseName(n, i){
   if (n && n.trim()) return n.trim();
@@ -351,7 +353,8 @@ function toggle(p){
     p.el.classList.toggle('on', p.object.visible);
     p.el.classList.toggle('off', !p.object.visible);
   }
- 
+  updateCount();
+  syncGroupButtons();
   pushHistory(prev);
   needsRender = true;
 }
@@ -364,6 +367,18 @@ function eyeIcon(hidden){
 }
 
 /* Скрыть / показать группу целиком */
+function syncGroupButtons(){
+  document.querySelectorAll('.group').forEach(gEl => {
+    const hideBtn = gEl.querySelector('.g-hide');
+    if (!hideBtn) return;
+    const items = [...gEl.querySelectorAll('.item')];
+    const allHidden = items.length > 0 && items.every(el => el.classList.contains('off'));
+    hideBtn.innerHTML = eyeIcon(allHidden);
+    hideBtn.classList.toggle('off', allHidden);
+    hideBtn.title = allHidden ? 'Показать группу' : 'Скрыть группу';
+  });
+}
+
 function toggleGroup(groupParts, hideBtn){
   const prev = snapshot();
   const hide = groupParts.some(p => p.object.visible); // если хоть одна видна — прячем всю
@@ -380,7 +395,8 @@ function toggleGroup(groupParts, hideBtn){
     hideBtn.classList.toggle('off', hide);
     hideBtn.title = hide ? 'Показать группу' : 'Скрыть группу';
   }
-  
+  updateCount();
+  syncGroupButtons();
   pushHistory(prev);
   needsRender = true;
 }
@@ -495,7 +511,8 @@ function applyState(state){
       p.el.classList.toggle('off', !p.object.visible);
     }
   });
-
+  updateCount();
+  syncGroupButtons();
   needsRender = true;
 }
 
@@ -708,7 +725,8 @@ loader.load('./mops.glb',
     buildList();
     buildPartMap();
     fitCamera();
-  
+    updateCount();
+    syncGroupButtons();
     applyAO();
     overlay.classList.add('gone');
     setTimeout(() => overlay.remove(), 600);
@@ -725,8 +743,8 @@ loader.load('./mops.glb',
 );
 
 /* ---------- Кнопки ---------- */
-document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
-document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-all').onclick  = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = true;  if(p.el){p.el.classList.add('on'); p.el.classList.remove('off');} }); updateCount(); syncGroupButtons(); pushHistory(prev); needsRender = true; };
+document.getElementById('btn-none').onclick = () => { const prev = snapshot(); parts.forEach(p => { p.object.visible = false; if(p.el){p.el.classList.remove('on'); p.el.classList.add('off');} }); updateCount(); syncGroupButtons(); pushHistory(prev); needsRender = true; };
 
 /* ---------- Сворачиваемый список деталей ----------
    Стрелка вверху списка: по клику список сворачивается вверх (▲) и
