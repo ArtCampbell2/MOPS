@@ -127,13 +127,8 @@
         </button>
       </div>
     </div>
-    <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▲</span></div>
-    <div class="list" id="list"><div class="empty">Загрузка модели…</div></div>
-
-    <div class="light-section">
-      <h4>Ambient Occlusion (N8AO)</h4>
-      <div class="ctl"><span class="online">Пресет «Детали» — радиус 100 мм · фактор 10 · точность 24</span></div>
-    </div>
+    <div class="list-toggle" id="list-toggle"><span>Список деталей</span><span class="chevron" id="list-chevron">▼</span></div>
+    <div class="list collapsed" id="list"><div class="empty">Загрузка модели…</div></div>
 
     <div class="foot"><span id="visible-count">0 / 0</span> видимо</div>
   </div>
@@ -184,7 +179,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 /* ---------- Сцена ---------- */
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x333333);   // белый фон
+scene.background = new THREE.Color(0xffffff);   // белый фон
 
 // IBL-окружение: даёт металлу/глянцу равномерные отражения со всех сторон,
 // чтобы не было «чёрной стороны» у блестящих материалов.
@@ -209,13 +204,14 @@ const shadowRig = [];
 function addShadowLight(dirVec, intensity){
   const l = new THREE.DirectionalLight(0xffffff, intensity);
   l.castShadow = true;
-  l.userData.dir = dirVec.clone().normalize();
+  l.userData.baseDir = dirVec.clone().normalize(); // исходное (неповёрнутое) направление
+  l.userData.dir = l.userData.baseDir.clone();
   scene.add(l);
   scene.add(l.target);
   shadowRig.push(l);
   return l;
 }
-addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55); // свет сбоку-спереди (без «солнца» сверху)
+addShadowLight(new THREE.Vector3(0.75, 0.4, 0.6), 0.55);  // свет сбоку-спереди
 addShadowLight(new THREE.Vector3(-0.9, 0.5, 0.3), 0.55);  // слева
 addShadowLight(new THREE.Vector3(0.3, 0.5, -0.9), 0.55);  // сзади-справа
 
@@ -423,13 +419,25 @@ function fitCamera(){
   controls.maxDistance = maxDim * 5;
   controls.update();
 
-  // Настройка теневых камер по габаритам модели → каждая деталь отбрасывает
-  // мягкую контактную тень на соседние со своего направления.
+  placeLights(center, maxDim);
+}
+
+/* ---------- Размещение источников света и поворот ----------
+   Позиция каждого направленного света = центр модели + (направление, повёрнутое
+   на угол azimuth вокруг вертикальной оси Y) * радиус. Вызывается из fitCamera
+   и при движении ползунка «Поворот света». */
+const LIGHT_AZ = { value: 153 };  // фиксированный азимут света (градусы)
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+function placeLights(center, maxDim){
   const d = maxDim * 0.9;   // тень охватывает только модель, без фона
+  const ang = LIGHT_AZ.value * Math.PI / 180;
   shadowRig.forEach(l => {
+    // поворот базового направления вокруг Y на угол azimuth
+    l.userData.dir = l.userData.baseDir.clone().applyAxisAngle(Y_AXIS, ang);
     l.position.copy(center).addScaledVector(l.userData.dir, maxDim * 2);
     l.target.position.copy(center);
-    l.shadow.mapSize.set(2048, 2048);   // легче для GPU, качество почти не меняется
+    l.shadow.mapSize.set(2048, 2048);
     l.shadow.camera.left = -d; l.shadow.camera.right = d;
     l.shadow.camera.top = d;   l.shadow.camera.bottom = -d;
     l.shadow.camera.near = maxDim * 0.01;
@@ -617,5 +625,5 @@ renderer.setAnimationLoop(() => {
   }
 });
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36165c86df7bc10',t:'MTc4ODU3MTA4MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a361b823cdd6c037',t:'MTc4ODU3NDQ1NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
